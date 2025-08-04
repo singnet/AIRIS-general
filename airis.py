@@ -230,6 +230,10 @@ class Airis:
         if s_mismatch_result or u_mismatch_result:
             self.action_plan = []
 
+        # If the prediction does not match the result
+        if self.prediction_state != post_state_hash:
+            self.action_plan = []
+
         # self.log.debug('Action Plan: %s', self.action_plan)
 
         # For every mismatch, check to see if a rule exists that has that outcome
@@ -291,99 +295,99 @@ class Airis:
         # self.log.debug('state graph compare %s', self.state_graph[o_state]['compare'])
         heapq.heappush(state_heap, (self.state_graph[o_state]['compare'], 0, o_state))
 
-        # while not goal_reached: TODO renable for long term planning
-        # self.log.debug('state heap %s', state_heap)
-        current_state_data = heapq.heappop(state_heap)
-        current_state = current_state_data[2]
-        # self.log.debug('current_state_data %s', current_state_data)
-        if current_state_data[0] == 0:
-            goal_reached = True
-            goal_state = current_state[2]
+        while not goal_reached:
+            # self.log.debug('state heap %s', state_heap)
+            current_state_data = heapq.heappop(state_heap)
+            current_state = current_state_data[2]
+            # self.log.debug('current_state_data %s', current_state_data)
+            if current_state_data[0] == 0:
+                goal_reached = True
+                goal_state = current_state[2]
 
-        step += 1
-        arg_list = dict()
-        for act_key in self.state_graph[current_state]['actions'].keys():
-            arg_list[act_key] = []
-            if isinstance(self.state_graph[current_state]['actions'][act_key], list):
-                for item in self.state_graph[current_state]['actions'][act_key]:
-                    arg_list[act_key].append(item)
+            step += 1
+            arg_list = dict()
+            for act_key in self.state_graph[current_state]['actions'].keys():
+                arg_list[act_key] = []
+                if isinstance(self.state_graph[current_state]['actions'][act_key], list):
+                    for item in self.state_graph[current_state]['actions'][act_key]:
+                        arg_list[act_key].append(item)
 
-            if isinstance(self.state_graph[current_state]['actions'][act_key], tuple):
-                arg_list[act_key].append(self.state_graph[current_state]['actions'][act_key])
+                if isinstance(self.state_graph[current_state]['actions'][act_key], tuple):
+                    arg_list[act_key].append(self.state_graph[current_state]['actions'][act_key])
 
-            if isinstance(self.state_graph[current_state]['actions'][act_key], dict):
-                #TODO add dictionary arguments (As a dictionary? Or seperated into a list?)
-                pass
+                if isinstance(self.state_graph[current_state]['actions'][act_key], dict):
+                    #TODO add dictionary arguments (As a dictionary? Or seperated into a list?)
+                    pass
 
-            if self.state_graph[current_state]['actions'][act_key] is None:
-                arg_list[act_key] = ['None']
+                if self.state_graph[current_state]['actions'][act_key] is None:
+                    arg_list[act_key] = ['None']
 
-        act_key_list = list(arg_list.keys())
+            act_key_list = list(arg_list.keys())
 
-        # for act_key in arg_list.keys():
-        while act_key_list:
-            act_key = choice(act_key_list)
-            act_key_list.remove(act_key)
-            # for act_arg in arg_list[act_key]:
-            while arg_list[act_key]:
-                act_arg = choice(arg_list[act_key])
-                arg_list[act_key].remove(act_arg)
-                act = (act_key, act_arg)
-                try:
-                    act_updates = self.knowledge['Action Updates'][str(act)]
-                except KeyError:
-                    print('Action not yet tried...')
-                    new_state = self.predict(act, current_state)
-                    goal_state = new_state
-                    # (match ratio, step, heap size, action, current state)
-                    path_heap[goal_state] = [(0, step, 0, act, current_state)]
-                    # self.log.debug('unknown action path heap %s', path_heap)
-                    goal_reached = True
-                    unknown_act = True
+            # for act_key in arg_list.keys():
+            while act_key_list:
+                act_key = choice(act_key_list)
+                act_key_list.remove(act_key)
+                # for act_arg in arg_list[act_key]:
+                while arg_list[act_key]:
+                    act_arg = choice(arg_list[act_key])
+                    arg_list[act_key].remove(act_arg)
+                    act = (act_key, act_arg)
+                    try:
+                        act_updates = self.knowledge['Action Updates'][str(act)]
+                    except KeyError:
+                        print('Action not yet tried...')
+                        new_state = self.predict(act, current_state)
+                        goal_state = new_state
+                        # (match ratio, step, heap size, action, current state)
+                        path_heap[goal_state] = [(0, step, 0, act, current_state)]
+                        # self.log.debug('unknown action path heap %s', path_heap)
+                        goal_reached = True
+                        unknown_act = True
+                        break
+
+                    update = False
+                    try:
+                        # (-act_updates, -copy.copy(predict_state['match_ratio']), new_hash))
+                        edge_data = self.state_graph[current_state]['edges'][str(act)]['state_heap'][0]
+                        self.state_graph[edge_data[2]]['compare'] = self.compare(edge_data[2], self.tasks)
+                        if edge_data[1] == 1:
+                            if edge_data[2] not in checked_states:
+                                heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
+                                checked_states.add(edge_data[2])
+                        else:
+                            update = True
+                            heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], edge_data[1], step, edge_data[2], act, current_state))
+
+                        try:
+                            heapq.heappush(path_heap[edge_data[2]], (-edge_data[1], step, len(path_heap[edge_data[2]]), act, current_state))
+                        except KeyError:
+                            path_heap[edge_data[2]] = [(-edge_data[1], step, 0, act, current_state)]
+
+                    except KeyError:
+                        update = True
+
+                    if update:
+                        new_state = self.predict(act, current_state)
+                        edge_data = self.state_graph[current_state]['edges'][str(act)]['state_heap'][0]
+                        self.state_graph[new_state]['compare'] = self.compare(new_state, self.tasks)
+                        if edge_data[1] == 1:
+                            if edge_data[2] not in checked_states:
+                                heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
+                                checked_states.add(edge_data[2])
+                        else:
+                            heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], edge_data[1], step, edge_data[2], act, current_state))
+
+                        try:
+                            heapq.heappush(path_heap[edge_data[2]], (-edge_data[1], step, len(path_heap[edge_data[2]]), act, current_state))
+                        except KeyError:
+                            path_heap[edge_data[2]] = [(-edge_data[1], step, 0, act, current_state)]
+
+                if unknown_act:
                     break
 
-                update = False
-                try:
-                    # (-act_updates, -copy.copy(predict_state['match_ratio']), new_hash))
-                    edge_data = self.state_graph[current_state]['edges'][str(act)]['state_heap'][0]
-                    self.state_graph[edge_data[2]]['compare'] = self.compare(edge_data[2], self.tasks)
-                    if edge_data[1] == 1:
-                        if edge_data[2] not in checked_states:
-                            heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
-                            checked_states.add(edge_data[2])
-                    else:
-                        update = True
-                        heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], edge_data[1], step, edge_data[2], act, current_state))
-
-                    try:
-                        heapq.heappush(path_heap[edge_data[2]], (-edge_data[1], step, len(path_heap[edge_data[2]]), act, current_state))
-                    except KeyError:
-                        path_heap[edge_data[2]] = [(-edge_data[1], step, 0, act, current_state)]
-
-                except KeyError:
-                    update = True
-
-                if update:
-                    new_state = self.predict(act, current_state)
-                    edge_data = self.state_graph[current_state]['edges'][str(act)]['state_heap'][0]
-                    self.state_graph[new_state]['compare'] = self.compare(new_state, self.tasks)
-                    if edge_data[1] == 1:
-                        if edge_data[2] not in checked_states:
-                            heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
-                            checked_states.add(edge_data[2])
-                    else:
-                        heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], edge_data[1], step, edge_data[2], act, current_state))
-
-                    try:
-                        heapq.heappush(path_heap[edge_data[2]], (-edge_data[1], step, len(path_heap[edge_data[2]]), act, current_state))
-                    except KeyError:
-                        path_heap[edge_data[2]] = [(-edge_data[1], step, 0, act, current_state)]
-
-            if unknown_act:
+            if not state_heap:
                 break
-
-        # if not state_heap: TODO renable for long term planning
-        #     break
 
         # randomize equivalent goal_heap entries
         if goal_heap:
