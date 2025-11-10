@@ -339,7 +339,10 @@ class Airis:
         checked_states = set()
         state_heap = []
         # self.log.debug('state graph compare %s', self.state_graph[o_state]['compare'])
-        heapq.heappush(state_heap, (self.state_graph[o_state]['compare'], 0, o_state))
+        if self.state_graph[o_state]['compare'] is not None:
+            heapq.heappush(state_heap, (self.state_graph[o_state]['compare'], 0, o_state))
+        else:
+            heapq.heappush(state_heap, (999999, 0, o_state))
 
         while not goal_reached:
             # self.log.debug('state heap %s', state_heap)
@@ -348,7 +351,8 @@ class Airis:
             # self.log.debug('current_state_data %s', current_state_data)
             if current_state_data[0] == 0:
                 goal_reached = True
-                goal_state = current_state[2]
+                goal_state = current_state
+                print('new goal state 1', goal_state)
 
             step += 1
             arg_list = dict()
@@ -385,6 +389,7 @@ class Airis:
                         print('Action not yet tried...')
                         new_state = self.predict(act, current_state)
                         goal_state = new_state
+                        print('new goal state 2', goal_state)
                         # (match ratio, step, heap size, action, current state)
                         path_heap[goal_state] = [(0, step, 0, act, current_state)]
                         # self.log.debug('unknown action path heap %s', path_heap)
@@ -399,11 +404,25 @@ class Airis:
                         self.state_graph[edge_data[2]]['compare'] = self.compare(edge_data[2], self.tasks)
                         if edge_data[1] == 1:
                             if edge_data[2] not in checked_states:
-                                heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
+                                if self.state_graph[edge_data[2]]['compare'] is not None:
+                                    if self.state_graph[edge_data[2]]['compare'] != 0:
+                                        heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
+                                    else:
+                                        goal_state = edge_data[2]
+                                        print('new goal state 3', goal_state)
+                                        break
+                                else:
+                                    heapq.heappush(state_heap, (999999, step, edge_data[2]))
                                 checked_states.add(edge_data[2])
                         else:
                             update = True
-                            heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], edge_data[1], step, edge_data[2], act, current_state))
+                            if self.state_graph[edge_data[2]]['compare'] is not None:
+                                if self.state_graph[edge_data[2]]['compare'] == 0:
+                                    stop = input('compare is 0 stop 1')
+                                heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], -edge_data[1], step, edge_data[2], act, current_state))
+                            else:
+                                stop = input('goal heap 0 add 1')
+                                heapq.heappush(goal_heap, (0, -edge_data[1], step, edge_data[2], act, current_state))
 
                         try:
                             heapq.heappush(path_heap[edge_data[2]], (-edge_data[1], step, len(path_heap[edge_data[2]]), act, current_state))
@@ -419,11 +438,20 @@ class Airis:
                         self.state_graph[new_state]['compare'] = self.compare(new_state, self.tasks)
                         if edge_data[1] == 1:
                             if edge_data[2] not in checked_states:
-                                heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
+                                if self.state_graph[edge_data[2]]['compare'] is not None:
+                                    if self.state_graph[edge_data[2]]['compare'] != 0:
+                                        heapq.heappush(state_heap, (self.state_graph[edge_data[2]]['compare'], step, edge_data[2]))
+                                else:
+                                    heapq.heappush(state_heap, (0, step, edge_data[2]))
                                 checked_states.add(edge_data[2])
                         else:
-                            heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], edge_data[1], step, edge_data[2], act, current_state))
-
+                            if self.state_graph[edge_data[2]]['compare'] is not None:
+                                if self.state_graph[edge_data[2]]['compare'] == 0:
+                                    stop = input('compare is 0 stop 2')
+                                heapq.heappush(goal_heap, (self.state_graph[edge_data[2]]['compare'], -edge_data[1], step, edge_data[2], act, current_state))
+                            else:
+                                stop = input('goal heap 0 add 2')
+                                heapq.heappush(goal_heap, (0, -edge_data[1], step, edge_data[2], act, current_state))
                         try:
                             heapq.heappush(path_heap[edge_data[2]], (-edge_data[1], step, len(path_heap[edge_data[2]]), act, current_state))
                         except KeyError:
@@ -432,8 +460,17 @@ class Airis:
                 if unknown_act:
                     break
 
+                if goal_state is not None:
+                    break
+
+            if goal_state is not None:
+                break
+
             if not state_heap:
                 break
+
+        print('path heap', path_heap)
+        print('goal heap', goal_heap)
 
         # randomize equivalent goal_heap entries
         if goal_heap:
@@ -450,21 +487,26 @@ class Airis:
             shuffle(rand_goal_list)
             goal_heap = rand_goal_list
 
-        print('path heap', path_heap)
-        print('goal heap', goal_heap)
+        print('post rand goal heap', goal_heap)
+
         if goal_heap and not unknown_act:
             print('goal reached', goal_reached)
             print('end search', end_search)
             if not goal_reached or end_search:
                 # Action plan: (action, predicted state, match ratio)
                 self.action_plan.insert(0, (goal_heap[0][4], goal_heap[0][3], goal_heap[0][1], None))
+                print('goal state pre', goal_state)
                 goal_state = goal_heap[0][5]
+                print('goal state post', goal_state)
             else: # TODO remove for long term planning
                 self.action_plan.insert(0, (goal_heap[0][4], goal_heap[0][3], goal_heap[0][1], None))
 
-            # while goal_state != o_state: TODO renable for long term planning
-            #     self.action_plan.insert(0, (path_heap[goal_state][0][3], goal_state, -path_heap[goal_state][0][0], None))
-            #     goal_state = path_heap[goal_state][0][4]
+            while goal_state != o_state: #TODO renable for long term planning
+                print(path_heap)
+                print(goal_state)
+                print(path_heap[goal_state])
+                self.action_plan.insert(0, (path_heap[goal_state][0][3], goal_state, -path_heap[goal_state][0][0], None))
+                goal_state = path_heap[goal_state][0][4]
 
         else:
             # self.log.debug('path heap %s', path_heap)
@@ -492,132 +534,295 @@ class Airis:
                         lst = self.fetch_input(self.state_graph[state]['s_input'][task[1]], *task[2])
                         val = lst[task[3]]
                         if val == task[4]:
-                            heapq.heappush(compare_heap[task], (-1, None, task[5]))
+                            heapq.heappush(compare_heap[task], (0, None, task[5], 0))
                             continue
                     if task[0] == 'u':
-                        for lst in self.state_graph[state]['u_input'][task[1]]:
-                            if lst[0] == task[2]:
-                                val = lst[task[3]]
-                                if val == task[4]:
-                                    heapq.heappush(compare_heap[task], (-1, None, task[5]))
-                                    continue
+                        u_heap = []
+                        if isinstance(self.state_graph[state]['u_input'][task[1]], list) or isinstance(self.state_graph[state]['u_input'][task[1]], dict):
+                            heapq.heappush(u_heap, [task[1]])
+                        while u_heap:
+                            origin = self.fetch_input(self.state_graph[state]['u_input'], *u_heap[0])
+                            if origin == task[2]:
+                                if origin[task[3]] == task[4]:
+                                    # print(origin, origin[task[3]], task[4])
+                                    heapq.heappush(compare_heap[task], (0, None, task[5], 0))
+                            else:
+                                if isinstance(origin, list) or isinstance(origin, dict):
+                                    for ii, vv in enumerate(origin):
+                                        if isinstance(vv, list):
+                                            path = copy.copy(u_heap[0])
+                                            path.append(ii)
+                                            heapq.heappush(u_heap, path)
+                                        if isinstance(origin, dict):
+                                            path = copy.copy(u_heap[0])
+                                            path.append(vv)
+                                            heapq.heappush(u_heap, path)
+                                        if isinstance(origin, list):
+                                            path = copy.copy(u_heap[0])
+                                            path.append(ii)
+                                            heapq.heappush(u_heap, path)
+
+                            heapq.heappop(u_heap)
+
+                        # for lst in self.state_graph[state]['u_input'][task[1]]:
+                        #     if lst[0] == task[2]:
+                        #         val = lst[task[3]]
+                        #         if val == task[4]:
+                        #             heapq.heappush(compare_heap[task], (-1, None, task[5]))
+                        #             stop = input('added')
+                        #             continue
 
                 try:
                     for pre_val in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/Pre Values']:
                         for rule in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/Rule IDs']:
+                            rule_diff = 0
+                            rule_total = 0
+                            task_diff = 0
                             pre_val_match = False
+                            # print('checking rules')
                             if task[0] == 's':
                                 if self.fetch_input(self.state_graph[state]['s_input'][task[1]], *task[2]) == pre_val:
                                     pre_val_match = True
 
                             if task[0] == 'u':
-                                for lst in self.state_graph[state]['u_input'][task[1]]:
-                                    if lst[0] == task[2]:
-                                        if lst[task[3]] == pre_val:
-                                            pre_val_match = True
+                                # for lst in self.state_graph[state]['u_input'][task[1]]:
+                                #     if lst[0] == task[2]:
+                                #         if lst[task[3]] == pre_val:
+                                #             pre_val_match = True
+
+                                u_heap = []
+                                if isinstance(self.state_graph[state]['u_input'][task[1]], list) or isinstance(self.state_graph[state]['u_input'][task[1]], dict):
+                                    # print('pushing to u_heap')
+                                    heapq.heappush(u_heap, [task[1]])
+                                while u_heap:
+                                    origin = self.fetch_input(self.state_graph[state]['u_input'], *u_heap[0])
+                                    if isinstance(origin, dict) and task[2] in origin.keys():
+                                        # print('task', task[2], task[3])
+                                        # print('origin data', origin[task[2]][task[3]], pre_val, type(origin[task[2]][task[3]]), type(pre_val))
+                                        # stop = input('inside 0')
+                                        if origin[task[2]][task[3]] == pre_val:
+                                            if task_key == 'Match':
+                                                if type(origin[task[2]][task[3]]) == int or type(origin[task[2]][task[3]]) == float:
+                                                    if abs((origin[task[2]][task[3]] + self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value']) - task[4]) < abs(origin[task[2]][task[3]] - task[4]):
+                                                        task_diff += abs((origin[task[2]][task[3]] + self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value']) - task[4])
+                                                        # stop = input('inside pre_val match')
+                                                        pre_val_match = True
+                                                        break
+                                                    else:
+                                                        task_diff += abs(origin[task[2]][task[3]] - task[4])
+                                                else:
+                                                    if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] == task[4]:
+                                                        pre_val_match = True
+                                                        break
+                                            if task_key == 'Increase':
+                                                pass
+                                            if task_key == 'Decrease':
+                                                pass
+                                    # elif origin == task[2]:
+                                    #     # print('inside origin check')
+                                    #     # print('origin preval', origin, origin[task[3]])
+                                    #     stop = input('stop 2' + str(origin[task[3]]) + ' | ' + str(pre_val))
+                                    #     if origin[task[3]] == pre_val:
+                                    #         # print('instide pre val check')
+                                    #         if task_key == 'Match':
+                                    #             # print('got to match 1')
+                                    #             stop = input('stop 3' + str(abs((origin[task[3]] + self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value']) - task[4])) + ' | ' + str(abs(origin[task[3]] - task[4])))
+                                    #             if type(origin[task[3]]) == int or type(origin[task[3]]) == float:
+                                    #                 if abs((origin[task[3]] + self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value']) - task[4]) < abs(origin[task[3]] - task[4]):
+                                    #                     pre_val_match = True
+                                    #                     break
+                                    #             else:
+                                    #                 if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] == task[4]:
+                                    #                     pre_val_match = True
+                                    #                     break
+                                    #         if task_key == 'Increase':
+                                    #             pass
+                                    #         if task_key == 'Decrease':
+                                    #             pass
+                                    else:
+                                        if isinstance(origin, list) or isinstance(origin, dict):
+                                            for ii, vv in enumerate(origin):
+                                                if isinstance(vv, list):
+                                                    path = copy.copy(u_heap[0])
+                                                    path.append(ii)
+                                                    heapq.heappush(u_heap, path)
+                                                if isinstance(origin, dict):
+                                                    path = copy.copy(u_heap[0])
+                                                    path.append(vv)
+                                                    heapq.heappush(u_heap, path)
+                                                if isinstance(origin, list):
+                                                    path = copy.copy(u_heap[0])
+                                                    path.append(ii)
+                                                    heapq.heappush(u_heap, path)
+
+                                    heapq.heappop(u_heap)
 
                             if pre_val_match:
-                                rule_diff = 0
-                                rule_ratio = 0
-                                rule_total = 0
-                                check_rule = False
-                                if task_key == 'Increase':
-                                    if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value Type'] == 'r':
-                                        if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] > 0:
-                                            check_rule = True
-
-                                if task_key == 'Decrease':
-                                    if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value Type'] == 'r':
-                                        if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] < 0:
-                                            check_rule = True
-
-                                if task_key == 'Match':
-                                    # Check if rule changes the value to the match value. If it a string and it does not, skip over the rule. If its a number, add the difference between what the current value is and how the rule changes it
-                                    # to the rule_diff and check the rule. (current_val + new_val) / match val.
-                                    if isinstance(task[4], str):
-                                        if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] == task[4]:
-                                            check_rule = True
-                                    else:
-                                        val = None
-                                        n_val = self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value']
-                                        if task[0] == 's':
-                                            lst = self.fetch_input(self.state_graph[state]['s_input'][task[1]], *task[2])
-                                            val = lst[task[3]]
-
-                                        if task[0] == 'u':
-                                            for lst in self.state_graph[state]['u_input'][task[1]]:
-                                                if lst[0] == task[2]:
-                                                    val = lst[task[3]]
-
-                                        if abs(task[4] - val) > abs(task[4] - (val + n_val)):
-                                            check_rule = True
-                                            rule_total += val + n_val
-
-                                if check_rule:
-                                    for key in self.state_graph[state]['s_input'].keys():
-                                        for lst_idx, lst in self.state_graph[state]['s_input'][key]:
-                                            s_heap = []
-                                            for index, val in enumerate(lst):
-                                                if isinstance(val, list):
-                                                    heapq.heappush(s_heap, [index])
-                                                while s_heap:
-                                                    item = self.fetch_input(self.state_graph[state]['s_input'][key], *s_heap[0])
-                                                    for i, v in enumerate(item):
-                                                        path = copy.copy(s_heap[0])
-                                                        path.append(i)
-                                                        if isinstance(item[i], list):
-                                                            heapq.heappush(s_heap, path)
-                                                        else:
-                                                            try:
-                                                                c_v = self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions/' + str(key) + '/' + str(path)]
-                                                                if v != c_v:
-                                                                    if isinstance(v, str):
+                                # print('pre val match')
+                                # check_rule = False
+                                # if task_key == 'Increase':
+                                #     if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value Type'] == 'r':
+                                #         if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] > 0:
+                                #             check_rule = True
+                                #
+                                # if task_key == 'Decrease':
+                                #     if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value Type'] == 'r':
+                                #         if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] < 0:
+                                #             check_rule = True
+                                #
+                                # if task_key == 'Match':
+                                #     # Check if rule changes the value to the match value. If it a string and it does not, skip over the rule. If its a number, add the difference between what the current value is and how the rule changes it
+                                #     # to the rule_diff and check the rule. (current_val + new_val) / match val.
+                                #     if isinstance(task[4], str):
+                                #         if self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value'] == task[4]:
+                                #             check_rule = True
+                                #     else:
+                                #         val = None
+                                #         n_val = self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/New Value']
+                                #         if task[0] == 's':
+                                #             lst = self.fetch_input(self.state_graph[state]['s_input'][task[1]], *task[2])
+                                #             val = lst[task[3]]
+                                #
+                                #         if task[0] == 'u':
+                                #             for lst in self.state_graph[state]['u_input'][task[1]]:
+                                #                 if lst[0] == task[2]:
+                                #                     val = lst[task[3]]
+                                #
+                                #         if abs(task[4] - val) > abs(task[4] - (val + n_val)):
+                                #             check_rule = True
+                                #             rule_total += val + n_val
+                                #
+                                # if check_rule:
+                                for key in self.state_graph[state]['s_input'].keys():
+                                    for lst_idx, lst in self.state_graph[state]['s_input'][key]:
+                                        s_heap = []
+                                        for index, val in enumerate(lst):
+                                            if isinstance(val, list):
+                                                heapq.heappush(s_heap, [index])
+                                            while s_heap:
+                                                item = self.fetch_input(self.state_graph[state]['s_input'][key], *s_heap[0])
+                                                for i, v in enumerate(item):
+                                                    path = copy.copy(s_heap[0])
+                                                    path.append(i)
+                                                    if isinstance(item[i], list):
+                                                        heapq.heappush(s_heap, path)
+                                                    else:
+                                                        try:
+                                                            c_v = self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions/' + str(key) + '/' + str(path)]
+                                                            if v != c_v:
+                                                                if isinstance(v, str):
+                                                                    rule_total += 1
+                                                                else:
+                                                                    if v != 0 and c_v != 0:
+                                                                        if v > c_v:
+                                                                            rule_diff += c_v / v
+                                                                        else:
+                                                                            rule_diff += v / c_v
                                                                         rule_total += 1
                                                                     else:
-                                                                        if v != 0 and c_v != 0:
-                                                                            if v > c_v:
-                                                                                rule_diff += c_v / v
-                                                                            else:
-                                                                                rule_diff += v / c_v
-                                                                            rule_total += 1
-                                                                        else:
-                                                                            rule_total += 1
-                                                                else:
-                                                                    rule_diff += 1
-                                                                    rule_total += 1
-                                                            except KeyError:
+                                                                        rule_total += 1
+                                                            else:
+                                                                rule_diff += 1
                                                                 rule_total += 1
-                                                    heapq.heappop(s_heap)
+                                                        except KeyError:
+                                                            rule_total += 1
+                                                heapq.heappop(s_heap)
 
-                                    for key in self.state_graph[state]['u_input'].keys():
-                                        for lst_idx, lst in self.state_graph[state]['u_input'][key]:
+                                # for key in self.state_graph[state]['u_input'].keys():
+                                #     for lst_idx, lst in self.state_graph[state]['u_input'][key]:
+                                #         try:
+                                #             if lst in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(key)]:
+                                #                 rule_diff += 1
+                                #             rule_total += 1
+                                #         except KeyError:
+                                #             # TODO Calculate match count based on best list structural & content similarity
+                                #             rule_total += 1
+
+                                for key in self.state_graph[state]['u_input'].keys():
+                                    u_heap = []
+                                    if isinstance(self.state_graph[state]['u_input'][key], list) or isinstance(self.state_graph[state]['u_input'][key], dict):
+                                        heapq.heappush(u_heap, [key])
+                                    while u_heap:
+                                        origin = self.fetch_input(self.state_graph[state]['u_input'], *u_heap[0])
+                                        if isinstance(origin, list) or isinstance(origin, dict):
+                                            for ii, vv in enumerate(origin):
+                                                if isinstance(vv, list):
+                                                    path = copy.copy(u_heap[0])
+                                                    path.append(ii)
+                                                    heapq.heappush(u_heap, path)
+                                                if isinstance(origin, dict):
+                                                    path = copy.copy(u_heap[0])
+                                                    path.append(vv)
+                                                    heapq.heappush(u_heap, path)
+                                                if isinstance(origin, list):
+                                                    path = copy.copy(u_heap[0])
+                                                    path.append(ii)
+                                                    heapq.heappush(u_heap, path)
+                                                if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
+                                                    stop = 'compare search error?'
+                                                    try:
+                                                        if origin in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(key)]:
+                                                            rule_diff += 1
+                                                    except KeyError:
+                                                        pass
+                                                    rule_total += 1
+
+                                        else:
                                             try:
-                                                if lst in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(key)]:
-                                                    rule_diff += 1
-                                                rule_total += 1
+                                                if str(u_heap[0]) in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(key)].keys():
+                                                    if origin not in self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(key)][str(u_heap[0])]:
+                                                        # stop = input('origin is not in rule data, adding to rule_diff')
+                                                        rule_diff += 1
                                             except KeyError:
-                                                # TODO Calculate match count based on best list structural & content similarity
-                                                rule_total += 1
+                                                pass
+                                            rule_total += 1
+                                        heapq.heappop(u_heap)
 
-                                    heapq.heappush(compare_heap[task], (rule_diff / rule_total, rule, task[5]))
+                                print('rule_diff', rule_diff)
+                                print('rule_total', rule_total)
+                                print((rule_diff / rule_total, rule, task[5]))
+                                # stop = input('pre_push check')
+                                heapq.heappush(compare_heap[task], (rule_diff / rule_total, rule, task[5], task_diff))
+                            else:
+                                heapq.heappush(compare_heap[task], (999999, None, task[5], task_diff))
                 except KeyError:
-                    heapq.heappush(compare_heap[task], (-1, None, task[5]))
+                    heapq.heappush(compare_heap[task], (999999, None, task[5], 0))
 
         compare_total = 0
         compare_count = 0
+        compare_task_diff = 0
         # self.log.debug('compare_heap %s', compare_heap)
-        print('compare heap', compare_heap)
         for key in compare_heap.keys():
             compare_total += 1
             if compare_heap[key]:
-                compare_count += compare_heap[key][0][0] * compare_heap[key][0][2]
+                if compare_heap[key][0][0] != 999999:
+                    compare_count += compare_heap[key][0][0] * compare_heap[key][0][2]
+                else:
+                    compare_count = 0
+                    compare_task_diff += compare_heap[key][0][3]
             else:
                 compare_count = 0
 
         if compare_total != 0:
-            compare_ratio = compare_count / compare_total
+            if compare_count >= 0:
+                compare_ratio = compare_count / compare_total
+            else:
+                compare_ratio = None
         else:
-            compare_ratio = 0
+            compare_ratio = None
+
+        if compare_ratio is not None:
+            compare_ratio += compare_task_diff
+        print('compare heap', compare_heap)
+        print('compare total', compare_total)
+        print('compare count', compare_count)
+        print('compare task diff', compare_task_diff)
+        print('compare ratio', compare_ratio)
+        # if compare_ratio != 0 and compare_ratio is not None and compare_ratio != 99999:
+        #     stop = input('non zero compare heap check!')
+        for key in compare_heap.keys():
+            if not compare_heap[key]:
+                stop = input('compare heap empty')
 
         return compare_ratio
 
@@ -792,9 +997,9 @@ class Airis:
             if isinstance(predict_state['u_input'][key], list) or isinstance(predict_state['u_input'][key], dict):
                 heapq.heappush(u_heap, [key])
             while u_heap:
-                print('key', key)
-                print('predict_state', predict_state['u_input'])
-                print('u_heap', u_heap[0])
+                # print('key', key)
+                # print('predict_state', predict_state['u_input'])
+                # print('u_heap', u_heap[0])
                 origin = self.fetch_input(predict_state['u_input'], *u_heap[0])
                 if isinstance(origin, list) or isinstance(origin, dict):
                     for ii, vv in enumerate(origin):
@@ -824,7 +1029,7 @@ class Airis:
                                         # self.log.debug('PREDICT Rule new value: %s', n_val)
                                         match_count = 0
                                         match_total = 0
-                                        print('made it here')
+                                        # print('made it here')
 
                                         # Check structured conditions
                                         for c_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions Keys']:
@@ -912,7 +1117,7 @@ class Airis:
                             # self.log.debug('PREDICT Rule new value: %s', n_val)
                             match_count = 0
                             match_total = 0
-                            print('made it here 2')
+                            # print('made it here 2')
 
                             # Check structured conditions
                             try:
@@ -972,7 +1177,7 @@ class Airis:
                             except KeyError:
                                 predict_u_heap[key][tuple(u_heap[0])] = []
                                 heapq.heappush(predict_u_heap[key][tuple(u_heap[0])], (-(match_count / match_total), age, rule, u_heap[0], n_val, match_count, match_total, updates, act))
-                            print('predict u heap', predict_u_heap)
+                            # print('predict u heap', predict_u_heap)
                                 # except KeyError:
                                 #     print('keyerror 1')
                                 #     pass
@@ -1043,7 +1248,7 @@ class Airis:
                 temp = predict_state['u_input'][key]
                 # self.log.debug('PREDICT temp: %s', temp)
                 # self.log.debug('PREDICT head %s / last %s', head, last)
-                print('temp', predict_state['u_input'][key], head, last)
+                # print('temp', predict_state['u_input'][key], head, last)
                 for i in head:
                     temp = temp[i]
                 temp[last] = data[4]
@@ -1101,7 +1306,7 @@ class Airis:
             self.state_graph[new_hash]['edges'] = dict()
             self.state_graph[new_hash]['grounded'] = False
 
-        print('match data', predict_state['match_count'], predict_state['match_total'])
+        # print('match data', predict_state['match_count'], predict_state['match_total'])
 
         # Return the new state hash key
         return new_hash
@@ -1142,10 +1347,10 @@ class Airis:
 
         try:
             self.knowledge[input_type + '-' + str(key) + '/Pre Values'] = set(self.knowledge[input_type + '-' + str(key) + '/Pre Values'])
-            self.knowledge[input_type + '-' + str(key) + '/Pre Values'].add(str(pre_val))
+            self.knowledge[input_type + '-' + str(key) + '/Pre Values'].add(pre_val)
         except KeyError:
             self.knowledge[input_type + '-' + str(key) + '/Pre Values'] = set()
-            self.knowledge[input_type + '-' + str(key) + '/Pre Values'].add(str(pre_val))
+            self.knowledge[input_type + '-' + str(key) + '/Pre Values'].add(pre_val)
 
         self.knowledge[input_type + '-' + str(key) + '/Pre Values'] = list(self.knowledge[input_type + '-' + str(key) + '/Pre Values'])
 
