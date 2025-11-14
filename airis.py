@@ -519,9 +519,9 @@ class Airis:
 
         # Use the task data to return a difference heap between the current state and the tasks given
         compare_heap = dict()
-        compare_total = 0
-        compare_count = 0
-        compare_task_diff = 0
+        compare_total = 0.0
+        compare_count = 0.0
+        compare_task_diff = 0.0
         for task_key in tasks.keys():
             for task in tasks[task_key]:
                 task = tuple(task)
@@ -532,7 +532,7 @@ class Airis:
                         lst = self.fetch_input(self.state_graph[state]['s_input'][task[1]], *task[2])
                         val = lst[task[3]]
                         if val == task[4]:
-                            compare_heap[task] = [(0.0, '', task[5], 0.0, '')]
+                            compare_heap[task] = [(0.0, 0.0, '', task[5], '')]
                             continue
                         else:
                             if type(val) != str:
@@ -548,7 +548,7 @@ class Airis:
                             if origin == task[2]:
                                 if origin[task[3]] == task[4]:
                                     # print(origin, origin[task[3]], task[4])
-                                    compare_heap[task] = [(0.0, '', task[5], 0.0, '')]
+                                    compare_heap[task] = [(0.0, 0.0, '', task[5], '')]
                                 else:
                                     if type(origin[task[3]]) != str:
                                         compare_task_diff += task[4] - origin[task[3]]
@@ -625,7 +625,7 @@ class Airis:
 
                                     heapq.heappop(u_heap)
 
-                            # Calculate how many pre-conditions for the validated rule are correct
+                            # Calculate how many pre-conditions for the output validated rule are correct
                             if pre_val_match:
                                 for key in self.state_graph[state]['s_input'].keys():
                                     for lst_idx, lst in self.state_graph[state]['s_input'][key]:
@@ -705,9 +705,9 @@ class Airis:
                                 print('rule_total', rule_total)
                                 print((rule_diff / rule_total, rule, task[5]))
                                 try:
-                                    heapq.heappush(compare_heap[task], (-(rule_diff / rule_total), rule, task[5], task_diff, self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/Actions']))
+                                    heapq.heappush(compare_heap[task], (task_diff, -(rule_diff / rule_total), rule, task[5], self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/Actions']))
                                 except KeyError:
-                                    compare_heap[task] = [(-(rule_diff / rule_total), rule, task[5], task_diff, self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/Actions'])]
+                                    compare_heap[task] = [(task_diff, -(rule_diff / rule_total), rule, task[5], self.knowledge[str(task[0]) + '-' + str(task[1]) + '/' + str(pre_val) + '/' + str(rule) + '/Actions'])]
                 except KeyError:
                     pass
 
@@ -715,8 +715,8 @@ class Airis:
             for key in compare_heap.keys():
                 compare_total += 1
                 if compare_heap[key]:
-                    compare_count += -compare_heap[key][0][0] * compare_heap[key][0][2]
-                    compare_task_diff += compare_heap[key][0][3]
+                    compare_count += -compare_heap[key][0][1] * compare_heap[key][0][3]
+                    compare_task_diff += compare_heap[key][0][0]
 
         if compare_total != 0:
             if compare_count >= 0:
