@@ -762,71 +762,130 @@ class Airis:
                         if isinstance(item[i], list):
                             heapq.heappush(s_heap, path)
                         else:
+                            outcomes = dict()
+                            # initialize outcome dict
                             try:
-                                for rule in self.knowledge['s-' + str(key) + '/' + str(v) + '/Actions'][str(act)]:
-                                    try:
-                                        # self.log.debug('PREDICT Checking value %s for rule %s', v, rule)
-                                        age = self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/Age']
-                                        updates = self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/Updates']
-                                        if self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/New Value Type'] == 'r':
-                                            n_val = v + self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/New Value']
-                                        else:
-                                            n_val = self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/New Value']
-                                        # self.log.debug('PREDICT Rule new value: %s', n_val)
-                                        match_count = 0
-                                        match_total = 0
-
-                                        # Check structured conditions
-                                        for c_key in self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/S Conditions Keys']:
-                                            # self.log.debug('PREDICT Checking S Conditions Key: %s', c_key)
-                                            for r_key in self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/S Conditions/' + str(c_key)].keys():
-                                                # self.log.debug('PREDICT r_key is: %s', r_key)
-                                                r_pos = json.loads(r_key)
-                                                r_path = [x + y for x, y in zip(path, r_pos)]
-                                                # self.log.debug('PREDICT Original val pos: %s', path)
-                                                # self.log.debug('PREDICT Checking pos: %s', r_path)
-                                                try:
-                                                    if self.fetch_input(predict_state['s_input'][c_key], *r_path) in self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/S Conditions/' + str(c_key)][r_key]:
-                                                        match_count += 1
-                                                        # self.log.debug('PREDICT match found')
-                                                    match_total += 1
-                                                    # self.log.debug('PREDICT value in the checking pos: %s', self.fetch_input(predict_state['s_input'][c_key], *r_path))
-                                                    # self.log.debug('PREDICT values in rule %s', self.knowledge['s-' + str(key) + '/' + str(v) + '/' + str(rule) + '/S Conditions/' + str(c_key)][r_key])
-                                                except IndexError:
-                                                    # self.log.debug('PREDICT Index Error')
-                                                    pass
-
-                                        # Check unstructured conditions
-                                        for c_key in predict_state['u_input'].keys():
-                                            for c_lst_idx, c_lst in enumerate(predict_state['u_input'][c_key]):
-                                                try:
-                                                    if c_lst in self.knowledge['u-' + str(key) + '/' + str(v) + '/' + str(rule) + '/U Conditions/' + str(c_key)]:
-                                                        match_count += 1
-                                                    match_total += 1
-                                                except KeyError:
-                                                    match_total += 1
-
-                                        try:
-                                            heapq.heappush(predict_s_heap[key][tuple(path)], (-(match_count / match_total), age, rule, path, n_val, match_count, match_total, updates, act))
-                                        except KeyError:
-                                            predict_s_heap[key][tuple(path)] = []
-                                            heapq.heappush(predict_s_heap[key][tuple(path)], (-(match_count / match_total), age, rule, path, n_val, match_count, match_total, updates, act))
-                                    except KeyError:
-                                        pass
-                                        # self.log.debug('PREDICT Key Error for rule %s', rule)
+                                for item in self.knowledge['s-' + str(key) + '/outcome ids']:
+                                    outcomes[item] = 0
                             except KeyError:
                                 pass
-                                # self.log.debug('PREDICT Key Error in value checking')
+
+                            # check indexes
+                            try:
+                                for item in self.knowledge['s-' + str(key) + '/indexes/' + str(path)]:
+                                    outcomes[item] += 1
+                            except KeyError:
+                                for item in outcomes.keys():
+                                    outcomes[item] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/indexes/' + str(item)]))
+
+                            # check actions
+                            try:
+                                for item in self.knowledge['s-' + str(key) + '/actions/' + str(act)]:
+                                    outcomes[item] += 1
+                            except KeyError:
+                                for item in outcomes.keys():
+                                    outcomes[item] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/actions/' + str(act)]))
+
+                            # check unstructured inputs
+                            c_u_path = []
+                            for c_key in predict_state['u_input'].keys():
+                                c_u_heap = []
+                                if isinstance(predict_state['u_input'][c_key], list) or isinstance(predict_state['u_input'][c_key], dict):
+                                    heapq.heappush(c_u_heap, [c_key])
+                                while c_u_heap:
+                                    c_origin = self.fetch_input(predict_state['u_input'], *c_u_heap[0])
+                                    if isinstance(c_origin, list) or isinstance(c_origin, dict):
+                                        for c_ii, c_vv in enumerate(c_origin):
+                                            if isinstance(c_vv, list):
+                                                c_path = copy.copy(c_u_heap[0])
+                                                c_path.append(c_ii)
+                                                heapq.heappush(c_u_heap, c_path)
+                                            if isinstance(c_origin, dict):
+                                                c_path = copy.copy(c_u_heap[0])
+                                                c_path.append(c_vv)
+                                                heapq.heappush(c_u_heap, c_path)
+                                            if isinstance(c_origin, list):
+                                                c_path = copy.copy(c_u_heap[0])
+                                                c_path.append(c_ii)
+                                                heapq.heappush(c_u_heap, c_path)
+                                            if type(c_origin) is not dict and type(c_vv) is not list and type(c_origin) is not list:
+                                                c_u_path.append((c_key, c_u_heap[0], c_origin))
+
+                                    else:
+                                        c_u_path.append((c_key, c_u_heap[0], c_origin))
+
+                                    heapq.heappop(c_u_heap)
+
+                            for c_path in c_u_path:
+                                try:
+                                    for outcome in self.knowledge['s-' + str(key) + '/u conditions/' + str(c_path[0]) + '/' + str(c_path[1]) + '/' + str(c_path[2])]:
+                                        outcomes[outcome] += 1
+                                except KeyError:
+                                    for outcome in outcomes.keys():
+                                        try:
+                                            outcomes[outcome] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]))
+                                        except KeyError:
+                                            pass
+
+
+                            # Check outcomes for structured inputs
+                            c_s_path = []
+                            for c_key in self.s_input.keys():
+                                c_s_heap = []
+                                for c_idx, c_val in enumerate(self.s_input[c_key]):
+                                    if isinstance(c_val, list):
+                                        heapq.heappush(c_s_heap, [c_idx])
+                                    while c_s_heap:
+                                        c_origin = self.fetch_input(self.s_input[c_key], *c_s_heap[0])
+                                        for c_ii, c_vv in enumerate(c_origin):
+                                            c_path = copy.copy(c_s_heap[0])
+                                            c_path.append(c_ii)
+                                            if isinstance(c_origin[c_ii], list):
+                                                heapq.heappush(c_s_heap, c_path)
+                                            else:
+                                                c_s_path.append((c_key, c_path, c_vv))
+                                        heapq.heappop(c_s_heap)
+
+                                for c_path_origin in c_s_path:
+                                    for c_path in c_s_path:
+                                        rel = [x - y for x, y in zip(c_path[1], c_path_origin[1])]
+                                        try:
+                                            for outcome in self.knowledge['s-' + str(key) + '/s conditions rel/' + str(c_path_origin[0]) + '/' + str(c_path_origin[1]) + '/' + str(rel) + '/' + str(c_path[2])]:
+                                                outcomes[outcome] += 1
+                                        except KeyError:
+                                            for outcome in outcomes.keys():
+                                                try:
+                                                    outcomes[outcome] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/s conditions rel/' + str(outcome) + '/' + str(c_path_origin[0]) + '/' + str(c_path_origin[1]) + '/' + str(rel)]))
+                                                except KeyError:
+                                                    pass
+
+                            for outcome in outcomes.keys():
+                                outcome_heap = []
+                                try:
+                                    heapq.heappush(outcome_heap, (len(self.knowledge['s-' + str(key) + '/absolute/' + str(outcome)]), 'absolute', self.knowledge['s-' + str(key) + '/absolute/' + str(outcome)]))
+                                    try:
+                                        heapq.heappush(outcome_heap, (len(self.knowledge['s-' + str(key) + '/relative/' + str(outcome)]), 'relative', self.knowledge['s-' + str(key) + '/relative/' + str(outcome)]))
+                                        heapq.heappush(outcome_heap, (len(self.knowledge['s-' + str(key) + '/ratio/' + str(outcome)]), 'ratio', self.knowledge['s-' + str(key) + '/ratio/' + str(outcome)]))
+                                    except KeyError:
+                                        pass
+                                except KeyError:
+                                    raise Exception
+
+                                heapq.heappush(predict_s_heap[key][tuple(path)], (-outcomes[outcome], outcome, path, outcome_heap[0], act))
 
                     heapq.heappop(s_heap)
 
-        for key in predict_state['u_input'].keys():
-            predict_u_heap[key] = dict()
+        # Predict unstructured inputs
+        u_path = []
+        for key in self.u_input.keys():
             u_heap = []
-            if isinstance(predict_state['u_input'][key], list) or isinstance(predict_state['u_input'][key], dict):
+            if isinstance(self.u_input[key], list) or isinstance(self.u_input[key], dict):
                 heapq.heappush(u_heap, [key])
+            else:
+                origin = self.fetch_input(self.u_input, *key)
+                u_path.append((key, key, origin))
             while u_heap:
-                origin = self.fetch_input(predict_state['u_input'], *u_heap[0])
+                origin = self.fetch_input(self.u_input, *u_heap[0])
                 if isinstance(origin, list) or isinstance(origin, dict):
                     for ii, vv in enumerate(origin):
                         if isinstance(vv, list):
@@ -842,153 +901,124 @@ class Airis:
                             path.append(ii)
                             heapq.heappush(u_heap, path)
                         if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
-                            try:
-                                for rule in self.knowledge['u-' + str(key) + '/' + str(origin) + '/Actions'][str(act)]:
-                                    try:
-                                        age = self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/Age']
-                                        updates = self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/Updates']
-                                        if self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/New Value Type'] == 'r':
-                                            n_val = origin + self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/New Value']
-                                        else:
-                                            n_val = self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/New Value']
-                                        match_count = 0
-                                        match_total = 0
-
-                                        # Check structured conditions
-                                        for c_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions Keys']:
-                                            # self.log.debug('PREDICT Checking S Conditions Key: %s', c_key)
-                                            for r_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions/' + str(c_key)].keys():
-                                                #TODO Fix this
-                                                r_path = r_key
-                                                try:
-                                                    if self.fetch_input(predict_state['s_input'][c_key], *r_path) in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions/' + str(c_key)][r_key]:
-                                                        match_count += 1
-                                                    match_total += 1
-                                                except IndexError:
-                                                    pass
-
-                                        # Check unstructured conditions
-                                        for c_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/U Conditions Keys']:
-                                            cu_heap = []
-                                            if isinstance(predict_state['u_input'][c_key], list) or isinstance(predict_state['u_input'][key], dict):
-                                                heapq.heappush(cu_heap, [key])
-                                            while cu_heap:
-                                                check = self.fetch_input(predict_state['u_input'], *cu_heap[0])
-                                                if isinstance(check, list) or isinstance(check, dict):
-                                                    for ci, cv in enumerate(check):
-                                                        if isinstance(cv, list):
-                                                            path = copy.copy(cu_heap[0])
-                                                            path.append(ci)
-                                                            heapq.heappush(cu_heap, path)
-                                                        if isinstance(check, dict):
-                                                            path = copy.copy(cu_heap[0])
-                                                            path.append(cv)
-                                                            heapq.heappush(cu_heap, path)
-                                                        if isinstance(check, list):
-                                                            path = copy.copy(cu_heap[0])
-                                                            path.append(ci)
-                                                            heapq.heappush(cu_heap, path)
-                                                        if type(check) is not dict and type(cv) is not list and type(check) is not list:
-                                                            match_total += 1
-                                                            if check in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/U Conditions/' + str(c_key)][str(cu_heap[0])]:
-                                                                match_count += 1
-
-                                                else:
-                                                    match_total += 1
-                                                    if check in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/U Conditions/' + str(c_key)][str(cu_heap[0])]:
-                                                        match_count += 1
-
-                                                heapq.heappop(cu_heap)
-
-                                        try:
-                                            heapq.heappush(predict_u_heap[key][tuple(u_heap[0])], (-(match_count / match_total), age, rule, u_heap[0], n_val, match_count, match_total, updates, act))
-                                        except KeyError:
-                                            predict_u_heap[key][tuple(u_heap[0])] = []
-                                            heapq.heappush(predict_u_heap[key][tuple(u_heap[0])], (-(match_count / match_total), age, rule, u_heap[0], n_val, match_count, match_total, updates, act))
-                                    except KeyError:
-                                        pass
-                            except KeyError:
-                                pass
+                            u_path.append((key, u_heap[0], origin))
                 else:
-                    rules_found = False
-                    try:
-                        rules = self.knowledge['u-' + str(key) + '/' + str(origin) + '/Actions'][str(act)]
-                        rules_found = True
-                    except KeyError:
-                        pass
-
-                    if rules_found:
-                        for rule in self.knowledge['u-' + str(key) + '/' + str(origin) + '/Actions'][str(act)]:
-                            # try:
-                            # self.log.debug('PREDICT Checking value %s for rule %s', v, rule)
-                            try:
-                                age = self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/Age']
-                            except KeyError:
-                                for item in self.knowledge:
-                                    print(item)
-                            updates = self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/Updates']
-                            if self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/New Value Type'] == 'r':
-                                n_val = origin + self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/New Value']
-                            else:
-                                n_val = self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/New Value']
-                            match_count = 0
-                            match_total = 0
-
-                            # Check structured conditions
-                            try:
-                                for c_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions Keys']:
-                                    for r_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions/' + str(c_key)].keys():
-                                        # TODO Fix this
-                                        r_path = r_key
-                                        try:
-                                            if self.fetch_input(predict_state['s_input'][c_key], *r_path) in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/S Conditions/' + str(c_key)][r_key]:
-                                                match_count += 1
-                                            match_total += 1
-                                        except IndexError:
-                                            pass
-                            except KeyError:
-                                pass
-
-                            # Check unstructured conditions
-                            for c_key in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/U Conditions Keys']:
-                                cu_heap = []
-                                if isinstance(predict_state['u_input'][c_key], list) or isinstance(predict_state['u_input'][key], dict):
-                                    heapq.heappush(cu_heap, [key])
-                                while cu_heap:
-                                    check = self.fetch_input(predict_state['u_input'], *cu_heap[0])
-                                    if isinstance(check, list) or isinstance(check, dict):
-                                        for ci, cv in enumerate(check):
-                                            if isinstance(cv, list):
-                                                path = copy.copy(cu_heap[0])
-                                                path.append(ci)
-                                                heapq.heappush(cu_heap, path)
-                                            if isinstance(check, dict):
-                                                path = copy.copy(cu_heap[0])
-                                                path.append(cv)
-                                                heapq.heappush(cu_heap, path)
-                                            if isinstance(check, list):
-                                                path = copy.copy(cu_heap[0])
-                                                path.append(ci)
-                                                heapq.heappush(cu_heap, path)
-                                            if type(check) is not dict and type(cv) is not list and type(check) is not list:
-                                                match_total += 1
-                                                if check in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/U Conditions/' + str(c_key)][str(cu_heap[0])]:
-                                                    match_count += 1
-
-                                    else:
-                                        match_total += 1
-                                        if check in self.knowledge['u-' + str(key) + '/' + str(origin) + '/' + str(rule) + '/U Conditions/' + str(c_key)][str(cu_heap[0])]:
-                                            match_count += 1
-
-                                    heapq.heappop(cu_heap)
-
-                            try:
-                                heapq.heappush(predict_u_heap[key][tuple(u_heap[0])], (-(match_count / match_total), age, rule, u_heap[0], n_val, match_count, match_total, updates, act))
-                            except KeyError:
-                                predict_u_heap[key][tuple(u_heap[0])] = []
-                                heapq.heappush(predict_u_heap[key][tuple(u_heap[0])], (-(match_count / match_total), age, rule, u_heap[0], n_val, match_count, match_total, updates, act))
+                    u_path.append((key, u_heap[0], origin))
 
                 heapq.heappop(u_heap)
+
+        for path in u_path:
+            outcomes = dict()
+            key = path[0]
+            index = path[1]
+            # initialize outcome dict
+            try:
+                for item in self.knowledge['s-' + str(key) + '/outcome ids']:
+                    outcomes[item] = 0
+            except KeyError:
+                pass
+
+            # check indexes
+            try:
+                for item in self.knowledge['s-' + str(key) + '/indexes/' + str(index)]:
+                    outcomes[item] += 1
+            except KeyError:
+                for item in outcomes.keys():
+                    outcomes[item] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/indexes/' + str(item)]))
+
+            # check actions
+            try:
+                for item in self.knowledge['s-' + str(key) + '/actions/' + str(act)]:
+                    outcomes[item] += 1
+            except KeyError:
+                for item in outcomes.keys():
+                    outcomes[item] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/actions/' + str(act)]))
+
+            # check unstructured inputs
+            c_u_path = []
+            for c_key in predict_state['u_input'].keys():
+                c_u_heap = []
+                if isinstance(predict_state['u_input'][c_key], list) or isinstance(predict_state['u_input'][c_key], dict):
+                    heapq.heappush(c_u_heap, [c_key])
+                while c_u_heap:
+                    c_origin = self.fetch_input(predict_state['u_input'], *c_u_heap[0])
+                    if isinstance(c_origin, list) or isinstance(c_origin, dict):
+                        for c_ii, c_vv in enumerate(c_origin):
+                            if isinstance(c_vv, list):
+                                c_path = copy.copy(c_u_heap[0])
+                                c_path.append(c_ii)
+                                heapq.heappush(c_u_heap, c_path)
+                            if isinstance(c_origin, dict):
+                                c_path = copy.copy(c_u_heap[0])
+                                c_path.append(c_vv)
+                                heapq.heappush(c_u_heap, c_path)
+                            if isinstance(c_origin, list):
+                                c_path = copy.copy(c_u_heap[0])
+                                c_path.append(c_ii)
+                                heapq.heappush(c_u_heap, c_path)
+                            if type(c_origin) is not dict and type(c_vv) is not list and type(c_origin) is not list:
+                                c_u_path.append((c_key, c_u_heap[0], c_origin))
+
+                    else:
+                        c_u_path.append((c_key, c_u_heap[0], c_origin))
+
+                    heapq.heappop(c_u_heap)
+
+            for c_path in c_u_path:
+                try:
+                    for outcome in self.knowledge['s-' + str(key) + '/u conditions/' + str(c_path[0]) + '/' + str(c_path[1]) + '/' + str(c_path[2])]:
+                        outcomes[outcome] += 1
+                except KeyError:
+                    for outcome in outcomes.keys():
+                        try:
+                            outcomes[outcome] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]))
+                        except KeyError:
+                            pass
+
+            # Check outcomes for structured inputs
+            c_s_path = []
+            for c_key in self.s_input.keys():
+                c_s_heap = []
+                for c_idx, c_val in enumerate(self.s_input[c_key]):
+                    if isinstance(c_val, list):
+                        heapq.heappush(c_s_heap, [c_idx])
+                    while c_s_heap:
+                        c_origin = self.fetch_input(self.s_input[c_key], *c_s_heap[0])
+                        for c_ii, c_vv in enumerate(c_origin):
+                            c_path = copy.copy(c_s_heap[0])
+                            c_path.append(c_ii)
+                            if isinstance(c_origin[c_ii], list):
+                                heapq.heappush(c_s_heap, c_path)
+                            else:
+                                c_s_path.append((c_key, c_path, c_vv))
+                        heapq.heappop(c_s_heap)
+
+                for c_path_origin in c_s_path:
+                    for c_path in c_s_path:
+                        rel = [x - y for x, y in zip(c_path[1], c_path_origin[1])]
+                        try:
+                            for outcome in self.knowledge['s-' + str(key) + '/s conditions rel/' + str(c_path_origin[0]) + '/' + str(c_path_origin[1]) + '/' + str(rel) + '/' + str(c_path[2])]:
+                                outcomes[outcome] += 1
+                        except KeyError:
+                            for outcome in outcomes.keys():
+                                try:
+                                    outcomes[outcome] += 1 - (1 / len(self.knowledge['s-' + str(key) + '/s conditions rel/' + str(outcome) + '/' + str(c_path_origin[0]) + '/' + str(c_path_origin[1]) + '/' + str(rel)]))
+                                except KeyError:
+                                    pass
+
+            for outcome in outcomes.keys():
+                outcome_heap = []
+                try:
+                    heapq.heappush(outcome_heap, (len(self.knowledge['s-' + str(key) + '/absolute/' + str(outcome)]), 'absolute', self.knowledge['s-' + str(key) + '/absolute/' + str(outcome)]))
+                    try:
+                        heapq.heappush(outcome_heap, (len(self.knowledge['s-' + str(key) + '/relative/' + str(outcome)]), 'relative', self.knowledge['s-' + str(key) + '/relative/' + str(outcome)]))
+                        heapq.heappush(outcome_heap, (len(self.knowledge['s-' + str(key) + '/ratio/' + str(outcome)]), 'ratio', self.knowledge['s-' + str(key) + '/ratio/' + str(outcome)]))
+                    except KeyError:
+                        pass
+                except KeyError:
+                    raise Exception
+
+                heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome], outcome, index, outcome_heap[0], act))
 
         # Predict actions (TODO)
 
@@ -1014,50 +1044,42 @@ class Airis:
                 temp = predict_state['s_input'][key]
                 for i in head:
                     temp = temp[i]
-                temp[last] = data[4]
+                if data[3][1] == 'absolute':
+                    temp[last] = data[3][2]
+                if data[3][1] == 'relative':
+                    temp[last] = temp[last] + data[3][2]
+                if data[3][1] == 'ratio':
+                    temp[last] = temp[last] * data[3][2]
 
         # Apply unstructured changes
         for key in predict_u_heap.keys():
             for path in predict_u_heap[key].keys():
                 try:
-                    predict_state['all_rules'][key][path] = copy.deepcopy(predict_u_heap[key][path])
+                    predict_state['all_rules'][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
                 except KeyError:
                     predict_state['all_rules'][key] = dict()
-                    predict_state['all_rules'][key][path] = copy.deepcopy(predict_u_heap[key][path])
+                    predict_state['all_rules'][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
                 predict_state['match_total'] += 1
                 data = heapq.heappop(predict_u_heap[key][path])
                 try:
-                    predict_state['applied_rules'][key][path] = data
+                    predict_state['applied_rules'][key][str(path)] = data
                 except KeyError:
                     predict_state['applied_rules'][key] = dict()
-                    predict_state['applied_rules'][key][path] = data
+                    predict_state['applied_rules'][key][str(path)] = data
                 predict_state['match_count'] += -data[0]
                 *head, last = path
                 head.pop(0)
                 temp = predict_state['u_input'][key]
                 for i in head:
                     temp = temp[i]
-                temp[last] = data[4]
+                if data[3][1] == 'absolute':
+                    temp[last] = data[3][2]
+                if data[3][1] == 'relative':
+                    temp[last] = temp[last] + data[3][2]
+                if data[3][1] == 'ratio':
+                    temp[last] = temp[last] * data[3][2]
 
         new_hash = self.make_hash(predict_state['s_input'], predict_state['u_input'], predict_state['actions'])
-        if predict_state['match_total'] != 0:
-            predict_state['match_ratio'] = predict_state['match_count'] / predict_state['match_total']
-        else:
-            predict_state['match_ratio'] = 0
-
-        try:
-            print_state = [self.state_graph[base_state]['s_input']['world grid'][0][i:i + 5] for i in range(0, len(self.state_graph[base_state]['s_input']['world grid'][0]), 5)]
-            for dv in print_state:
-                pass
-        except KeyError:
-            pass
-
-        try:
-            print_state = [predict_state['s_input']['world grid'][0][i:i + 5] for i in range(0, len(predict_state['s_input']['world grid'][0]), 5)]
-            for dv in print_state:
-                pass
-        except KeyError:
-            pass
 
         # Update base_state edges
         if act not in self.state_graph[base_state]['edges'].keys():
@@ -1066,12 +1088,12 @@ class Airis:
             act_updates = self.knowledge['Action Updates'][str(act)]
         except KeyError:
             act_updates = 0
-        self.state_graph[base_state]['edges'][str(act)][new_hash] = (copy.copy(predict_state['match_ratio']), act_updates, copy.deepcopy(predict_state['applied_rules']), copy.deepcopy(predict_state['all_rules']))
+        self.state_graph[base_state]['edges'][str(act)][new_hash] = (copy.copy(predict_state['match_count']), act_updates, copy.deepcopy(predict_state['applied_rules']), copy.deepcopy(predict_state['all_rules']))
         try:
-            heapq.heappush(self.state_graph[base_state]['edges'][str(act)]['state_heap'], (-act_updates, -copy.copy(predict_state['match_ratio']), new_hash))
+            heapq.heappush(self.state_graph[base_state]['edges'][str(act)]['state_heap'], (-copy.copy(predict_state['match_count']), new_hash))
         except KeyError:
             self.state_graph[base_state]['edges'][str(act)]['state_heap'] = []
-            heapq.heappush(self.state_graph[base_state]['edges'][str(act)]['state_heap'], (-act_updates, -copy.copy(predict_state['match_ratio']), new_hash))
+            heapq.heappush(self.state_graph[base_state]['edges'][str(act)]['state_heap'], (-copy.copy(predict_state['match_count']), new_hash))
         self.state_graph[base_state]['edges'][str(act)]['updates'] = act_updates
 
         # Check if the predicted state already exists in the state graph. If not, create it.
@@ -1089,6 +1111,8 @@ class Airis:
         # Return the new state hash key
         return new_hash
 
+    # def check_outcomes(self, ):
+
     def create_rule(self, act, input_type, key, index, pre_val, post_val):
         # Create a new rule for the given input and performed action
         new_rule = str(uuid.uuid4())[:6]
@@ -1098,13 +1122,16 @@ class Airis:
             for outcome_id in self.knowledge[input_type + '-' + str(key) + '/outcome ids']:
                 abs_values = self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(outcome_id)]
                 if len(abs_values) == 1 and post_val in abs_values:
+                    self.update_rule(act, input_type, key, index, pre_val, post_val, new_rule)
                     return None
                 if type(post_val) != str:
                     rel_values = self.knowledge[input_type + '-' + str(key) + '/relative/' + str(outcome_id)]
                     if len(rel_values) == 1 and post_val - pre_val in rel_values:
+                        self.update_rule(act, input_type, key, index, pre_val, post_val, new_rule)
                         return None
                     rat_values = self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(outcome_id)]
                     if len(rat_values) == 1 and post_val / pre_val in rat_values:
+                        self.update_rule(act, input_type, key, index, pre_val, post_val, new_rule)
                         return None
         except KeyError:
             pass
@@ -1115,10 +1142,10 @@ class Airis:
         except KeyError:
             self.knowledge[input_type + '-' + str(key) + '/outcome ids'] = {new_rule}
 
-        self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(new_rule)] = post_val
+        self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(new_rule)] = {post_val}
         if type(post_val) != str:
-            self.knowledge[input_type + '-' + str(key) + '/relative/' + str(new_rule)] = post_val - pre_val
-            self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(new_rule)] = post_val / pre_val
+            self.knowledge[input_type + '-' + str(key) + '/relative/' + str(new_rule)] = {post_val - pre_val}
+            self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(new_rule)] = {post_val / pre_val}
 
         # Add index of change
         try:
@@ -1126,11 +1153,15 @@ class Airis:
         except KeyError:
             self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(index)] = {new_rule}
 
+        self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(new_rule)] = {str(index)}
+
         # Add action
         try:
-            self.knowledge[input_type + '-' + str(key) + '/action/' + str(act)].add(new_rule)
+            self.knowledge[input_type + '-' + str(key) + '/actions/' + str(act)].add(new_rule)
         except KeyError:
-            self.knowledge[input_type + '-' + str(key) + '/action/' + str(act)] = {new_rule}
+            self.knowledge[input_type + '-' + str(key) + '/actions/' + str(act)] = {new_rule}
+
+        self.knowledge[input_type + '-' + str(key) + '/actions/' + str(new_rule)] = {str(act)}
 
         # Go through all unstructured inputs and record conditions
         u_path = []
@@ -1170,6 +1201,8 @@ class Airis:
             except KeyError:
                 self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(path[0]) + '/' + str(path[1]) + '/' + str(path[2])] = {new_rule}
 
+            self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(new_rule) + '/' + str(path[0]) + '/' + str(path[1])] = {str(path[2])}
+
         # Go through all structured inputs and record conditions
         s_path = []
         for key in self.s_input.keys():
@@ -1196,270 +1229,102 @@ class Airis:
                     except KeyError:
                         self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel) + '/' + str(path[2])] = {new_rule}
 
-
-        # try:
-        #     check = self.knowledge['Action Rules']
-        # except KeyError:
-        #     self.knowledge['Action Rules'] = dict()
-        #
-        # try:
-        #     check = self.knowledge['Action Updates']
-        # except KeyError:
-        #     self.knowledge['Action Updates'] = dict()
-        #
-        # try:
-        #     self.knowledge['Action Rules'][str(act)].append(new_rule)
-        # except KeyError:
-        #     self.knowledge['Action Rules'][str(act)] = [new_rule]
-        #
-        # try:
-        #     self.knowledge['Action Updates'][str(act)] += 1
-        # except KeyError:
-        #     self.knowledge['Action Updates'][str(act)] = 1
-        #
-        # try:
-        #     check = self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Actions']
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Actions'] = dict()
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Actions'][str(act)].append(new_rule)
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Actions'][str(act)] = [new_rule]
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/Pre Values'] = set(self.knowledge[input_type + '-' + str(key) + '/Pre Values'])
-        #     self.knowledge[input_type + '-' + str(key) + '/Pre Values'].add(pre_val)
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/Pre Values'] = set()
-        #     self.knowledge[input_type + '-' + str(key) + '/Pre Values'].add(pre_val)
-        #
-        # self.knowledge[input_type + '-' + str(key) + '/Pre Values'] = list(self.knowledge[input_type + '-' + str(key) + '/Pre Values'])
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'] = set(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'])
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'].add(new_rule)
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'] = set()
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'].add(new_rule)
-        #
-        # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'] = list(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/Rule IDs'])
-        #
-        # if isinstance(pre_val, float):
-        #     if not isinstance(post_val, float):
-        #         print('Pre-Value was a float and Post-Value is not')
-        #         raise Exception
-        #     n_val = post_val - pre_val
-        # else:
-        #     n_val = post_val
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/New Values'] = set(self.knowledge[input_type + '-' + str(key) + '/New Values'])
-        #     self.knowledge[input_type + '-' + str(key) + '/New Values'].add((pre_val, new_rule, n_val))
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/New Values'] = set()
-        #     self.knowledge[input_type + '-' + str(key) + '/New Values'].add((pre_val, new_rule, n_val))
-        #
-        # self.knowledge[input_type + '-' + str(key) + '/New Values'] = list(self.knowledge[input_type + '-' + str(key) + '/New Values'])
-        #
-        # try:
-        #     check = self.knowledge[input_type + '-' + str(key) + '/Value Pairs']
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/Value Pairs'] = dict()
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/Value Pairs'][str((pre_val, n_val))].append((str(new_rule), act))
-        # except KeyError:
-        #     self.knowledge[input_type + '-' + str(key) + '/Value Pairs'][str((pre_val, n_val))] = [(str(new_rule), act)]
-        #
-        # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/Actions'] = act
-        # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/Updates'] = 0
-        # if isinstance(n_val, float) or isinstance(n_val, int):
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/New Value Type'] = 'r'
-        # else:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/New Value Type'] = 'a'
-        # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/New Value'] = n_val
-        # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/Age'] = self.time_step
-        #
-        # s_path = []
-        # for key in self.s_input.keys():
-        #     s_heap = []
-        #     for idx, val in enumerate(self.s_input[key]):
-        #         if isinstance(val, list):
-        #             heapq.heappush(s_heap, [idx])
-        #         while s_heap:
-        #             origin = self.fetch_input(self.s_input[key], *s_heap[0])
-        #             for ii, vv in enumerate(origin):
-        #                 path = copy.copy(s_heap[0])
-        #                 path.append(ii)
-        #                 if isinstance(origin[ii], list):
-        #                     heapq.heappush(s_heap, path)
-        #                 else:
-        #                     s_path.append((key, path, vv))
-        #             heapq.heappop(s_heap)
-        #
-        # for path in s_path:
-        #
-        #     try:
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions Keys'].add(path[0])
-        #     except KeyError:
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions Keys'] = set()
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions Keys'].add(path[0])
-        #
-        #     if input_type == 's':
-        #         try:
-        #             rel = [x - y for x, y in zip(path[1], index)]
-        #             self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions/' + str(path[0])][str(rel)] = [path[2]]
-        #         except KeyError:
-        #             rel = [x - y for x, y in zip(path[1], index)]
-        #             self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions/' + str(path[0])] = dict()
-        #             self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions/' + str(path[0])][str(rel)] = [path[2]]
-        #
-        #     else:
-        #         try:
-        #             rel = path[1]
-        #             self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions/' + str(path[0])][str(rel)] = [path[2]]
-        #         except KeyError:
-        #             rel = path[1]
-        #             self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions/' + str(path[0])] = dict()
-        #             self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions/' + str(path[0])][str(rel)] = [path[2]]
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions Keys'] = list(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/S Conditions Keys'])
-        # except KeyError:
-        #     pass
-        #
-        # u_path = []
-        # for key in self.u_input.keys():
-        #     u_heap = []
-        #     if isinstance(self.u_input[key], list) or isinstance(self.u_input[key], dict):
-        #         heapq.heappush(u_heap, [key])
-        #     while u_heap:
-        #         origin = self.fetch_input(self.u_input, *u_heap[0])
-        #         if isinstance(origin, list) or isinstance(origin, dict):
-        #             for ii, vv in enumerate(origin):
-        #                 if isinstance(vv, list):
-        #                     path = copy.copy(u_heap[0])
-        #                     path.append(ii)
-        #                     heapq.heappush(u_heap, path)
-        #                 if isinstance(origin, dict):
-        #                     path = copy.copy(u_heap[0])
-        #                     path.append(vv)
-        #                     heapq.heappush(u_heap, path)
-        #                 if isinstance(origin, list):
-        #                     path = copy.copy(u_heap[0])
-        #                     path.append(ii)
-        #                     heapq.heappush(u_heap, path)
-        #                 if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
-        #                     u_path.append((key, u_heap[0], origin))
-        #         else:
-        #             u_path.append((key, u_heap[0], origin))
-        #
-        #         heapq.heappop(u_heap)
-        #
-        # for path in u_path:
-        #     try:
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions Keys'].add(path[0])
-        #     except KeyError:
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions Keys'] = set()
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions Keys'].add(path[0])
-        #
-        #     try:
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions/' + str(path[0])][str(path[1])] = [path[2]]
-        #     except KeyError:
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions/' + str(path[0])] = dict()
-        #         self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions/' + str(path[0])][str(path[1])] = [path[2]]
-        #
-        # try:
-        #     self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions Keys'] = list(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(new_rule) + '/U Conditions Keys'])
-        # except KeyError:
-        #     pass
+                    self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(new_rule) + '/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel)] = {str(path[2])}
 
         return new_rule
 
-    def update_rule(self, act, input_type, key, index, pre_val, post_val, lst, rule):
-        self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/Updates'] += 1
-        self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/Age'] = self.time_step
-        if input_type == 's':
-            s_path = []
-            for key in self.s_input.keys():
-                s_heap = []
-                for idx, val in enumerate(self.s_input[key]):
-                    if isinstance(val, list):
-                        heapq.heappush(s_heap, [idx])
-                    while s_heap:
-                        origin = self.fetch_input(self.s_input[key], *s_heap[0])
-                        for ii, vv in enumerate(origin):
-                            path = copy.copy(s_heap[0])
-                            path.append(ii)
-                            if isinstance(origin[ii], list):
-                                heapq.heappush(s_heap, path)
-                            else:
-                                s_path.append((key, path, vv))
-                        heapq.heappop(s_heap)
+    def update_rule(self, act, input_type, key, index, pre_val, post_val, rule):
 
-            for path in s_path:
-                self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'] = set(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'])
-                try:
-                    self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'].add(path[0])
-                except KeyError:
-                    pass
-                    # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'] = set()
-                    # self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'].add(path[0])
+        self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(rule)].add(post_val)
+        if type(post_val) != str:
+            self.knowledge[input_type + '-' + str(key) + '/relative/' + str(rule)].add(post_val - pre_val)
+            self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(rule)].add(post_val / pre_val)
 
-                if input_type == 's':
+        try:
+            self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(index)].add(rule)
+        except KeyError:
+            self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(index)] = {rule}
+
+        self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(rule)].add(str(index))
+
+        try:
+            self.knowledge[input_type + '-' + str(key) + '/actions/' + str(act)].add(rule)
+        except KeyError:
+            self.knowledge[input_type + '-' + str(key) + '/actions/' + str(act)] = {rule}
+
+        self.knowledge[input_type + '-' + str(key) + '/actions/' + str(rule)].add(str(act))
+
+        s_path = []
+        for key in self.s_input.keys():
+            s_heap = []
+            for idx, val in enumerate(self.s_input[key]):
+                if isinstance(val, list):
+                    heapq.heappush(s_heap, [idx])
+                while s_heap:
+                    origin = self.fetch_input(self.s_input[key], *s_heap[0])
+                    for ii, vv in enumerate(origin):
+                        path = copy.copy(s_heap[0])
+                        path.append(ii)
+                        if isinstance(origin[ii], list):
+                            heapq.heappush(s_heap, path)
+                        else:
+                            s_path.append((key, path, vv))
+                    heapq.heappop(s_heap)
+
+            for path_origin in s_path:
+                for path in s_path:
+                    rel = [x - y for x, y in zip(path[1], path_origin[1])]
                     try:
-                        rel = [x - y for x, y in zip(path[1], index)]
-                        if path[2] not in self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions/' + str(path[0])][str(rel)]:
-                            self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions/' + str(path[0])][str(rel)].append(path[2])
+                        self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel) + '/' + str(path[2])].add(rule)
                     except KeyError:
-                        pass
+                        self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel) + '/' + str(path[2])] = {rule}
 
-            self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'] = list(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/S Conditions Keys'])
+                    try:
+                        self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(rule) + '/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel)].add(str(path[2]))
+                    except KeyError:
+                        self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(rule) + '/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel)] = {str(path[2])}
 
-        if input_type == 'u':
-            u_path = []
-            for key in self.u_input.keys():
-                u_heap = []
-                if isinstance(self.u_input[key], list) or isinstance(self.u_input[key], dict):
-                    heapq.heappush(u_heap, [key])
-                while u_heap:
-                    origin = self.fetch_input(self.u_input, *u_heap[0])
-                    if isinstance(origin, list) or isinstance(origin, dict):
-                        for ii, vv in enumerate(origin):
-                            if isinstance(vv, list):
-                                path = copy.copy(u_heap[0])
-                                path.append(ii)
-                                heapq.heappush(u_heap, path)
-                            if isinstance(origin, dict):
-                                path = copy.copy(u_heap[0])
-                                path.append(vv)
-                                heapq.heappush(u_heap, path)
-                            if isinstance(origin, list):
-                                path = copy.copy(u_heap[0])
-                                path.append(ii)
-                                heapq.heappush(u_heap, path)
-                            if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
-                                u_path.append((key, u_heap[0], origin))
-                    else:
-                        u_path.append((key, u_heap[0], origin))
+        u_path = []
+        for key in self.u_input.keys():
+            u_heap = []
+            if isinstance(self.u_input[key], list) or isinstance(self.u_input[key], dict):
+                heapq.heappush(u_heap, [key])
+            else:
+                origin = self.fetch_input(self.u_input, *key)
+                u_path.append((key, key, origin))
+            while u_heap:
+                origin = self.fetch_input(self.u_input, *u_heap[0])
+                if isinstance(origin, list) or isinstance(origin, dict):
+                    for ii, vv in enumerate(origin):
+                        if isinstance(vv, list):
+                            path = copy.copy(u_heap[0])
+                            path.append(ii)
+                            heapq.heappush(u_heap, path)
+                        if isinstance(origin, dict):
+                            path = copy.copy(u_heap[0])
+                            path.append(vv)
+                            heapq.heappush(u_heap, path)
+                        if isinstance(origin, list):
+                            path = copy.copy(u_heap[0])
+                            path.append(ii)
+                            heapq.heappush(u_heap, path)
+                        if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
+                            u_path.append((key, u_heap[0], origin))
+                else:
+                    u_path.append((key, u_heap[0], origin))
 
-                    heapq.heappop(u_heap)
+                heapq.heappop(u_heap)
 
-            for path in u_path:
-                self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions Keys'] = set(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions Keys'])
-                try:
-                    self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions Keys'].add(path[0])
-                except KeyError:
-                    pass
+        for path in u_path:
+            try:
+                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(path[0]) + '/' + str(path[1]) + '/' + str(path[2])].add(rule)
+            except KeyError:
+                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(path[0]) + '/' + str(path[1]) + '/' + str(path[2])] = {rule}
 
-                try:
-                    if path[2] not in self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(path[0])][str(path[1])]:
-                        self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions/' + str(path[0])][str(path[1])].append(path[2])
-                except KeyError:
-                    pass
-
-            self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions Keys'] = list(self.knowledge[input_type + '-' + str(key) + '/' + str(pre_val) + '/' + str(rule) + '/U Conditions Keys'])
+            try:
+                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(rule) + '/' + str(path[0]) + '/' + str(path[1])].add(str(path[2]))
+            except KeyError:
+                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(rule) + '/' + str(path[0]) + '/' + str(path[1])] = {str(path[2])}
 
     def save_knowledge(self, fname):
         with open(fname + '.json', 'w') as file: #Enable to save data to file
