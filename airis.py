@@ -9,11 +9,11 @@ import logging
 from datetime import datetime
 from random import choice
 from random import shuffle
+import sys
 
 def serialize_sets(obj):
     if isinstance(obj, set):
         return list(obj)
-
     return obj
 
 class Airis:
@@ -99,11 +99,16 @@ class Airis:
         self.action_taken = None
         self.prediction_state = None
         self.prediction_match = None
+        self.pre_capture_state = None
 
         self.log = logging.getLogger(__name__)
         self.init_time = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
         logging.basicConfig(filename='airis logs/airis init ' + str(self.init_time) + '.log', encoding='utf-8', level=logging.DEBUG) #Enable to log to file
         self.log.info('AIRIS class initialized')
+
+        init_time = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+        logfile = open('training logs/training log ' + str(init_time) + '.log', 'w')
+        sys.stdout = logfile
 
     def pre_capture_input(self, s_input, u_input, actions, tasks):
         # Update inputs and actions to current
@@ -128,7 +133,10 @@ class Airis:
             self.state_graph[state_hash]['compare'] = self.compare(state_hash, self.tasks)
             self.state_graph[state_hash]['edges'] = dict()
             self.state_graph[state_hash]['grounded'] = True
+            self.state_graph[state_hash]['all_rules_s'] = dict()
+            self.state_graph[state_hash]['all_rules_u'] = dict()
 
+        self.pre_capture_state = state_hash
         # If there is no action plan, make one and return the first action in the plan
         if not self.action_plan:
             self.make_plan(state_hash)
@@ -161,6 +169,8 @@ class Airis:
             self.state_graph[post_state_hash]['compare'] = self.compare(post_state_hash, self.tasks)
             self.state_graph[post_state_hash]['edges'] = dict()
             self.state_graph[post_state_hash]['grounded'] = True
+            self.state_graph[post_state_hash]['all_rules_s'] = dict()
+            self.state_graph[post_state_hash]['all_rules_u'] = dict()
 
         # Check for mismatches between the predicted state and the new state
         s_mismatch_result = []
@@ -233,110 +243,6 @@ class Airis:
         for path in u_path:
             new_rule = self.create_rule(act, 'u', path[0], path[1], path[2], path[3])
 
-        # for key in self.s_input.keys():
-        #     s_heap = []
-        #     for index, val in enumerate(self.s_input[key]):
-        #         if isinstance(val, list):
-        #             heapq.heappush(s_heap, [index])
-        #         while s_heap:
-        #             origin = self.fetch_input(self.s_input[key], *s_heap[0])
-        #             check = self.fetch_input(post_s_input[key], *s_heap[0])
-        #             try:
-        #                 pred = self.fetch_input(self.state_graph[self.prediction_state]['s_input'], *s_heap[0])
-        #             except KeyError:
-        #                 pred = None
-        #             for ii, vv in enumerate(origin):
-        #                 path = copy.copy(s_heap[0])
-        #                 path.append(ii)
-        #                 if isinstance(origin[ii], list):
-        #                     heapq.heappush(s_heap, path)
-        #                 else:
-        #                     try:
-        #                         if str((origin[ii], check[ii])) in self.knowledge['s-' + str(key) + '/Value Pairs'].keys():
-        #                             found_rule = False
-        #                             for item in self.knowledge['s-' + str(key) + '/Value Pairs'][str((origin[ii], check[ii]))]:
-        #                                 if item[1] == act:
-        #                                     # self.log.debug('UPDATING RULE %s %s %s', path, vv, check[ii])
-        #                                     self.update_rule(act, 's', key, path, vv, check[ii], None, item[0])
-        #                                     found_rule = True
-        #                             if not found_rule:
-        #                                 new_rule = self.create_rule(act, 's', key, path, vv, check[ii])
-        #                                 # self.log.debug('CREATING RULE not found_rule %s %s %s %s', path, vv, check[ii], new_rule)
-        #                         else:
-        #                             new_rule = self.create_rule(act, 's', key, path, vv, check[ii])
-        #                             # self.log.debug('CREATING RULE no match value pair %s %s %s %s', path, vv, check[ii], new_rule)
-        #
-        #                     except KeyError:
-        #                         new_rule = self.create_rule(act, 's', key, path, vv, check[ii])
-        #                         # self.log.debug('CREATING RULE KeyError %s %s %s %s', path, vv, check[ii], new_rule)
-        #
-        #                     if check[ii] != pred[ii]:
-        #                         s_mismatch_result.append((key, path, vv, check[ii]))
-        #             heapq.heappop(s_heap)
-        #
-        # for key in self.u_input.keys():
-        #     u_heap = []
-        #     if isinstance(self.u_input[key], list) or isinstance(self.u_input[key], dict):
-        #         heapq.heappush(u_heap, [key])
-        #     while u_heap:
-        #         origin = self.fetch_input(self.u_input, *u_heap[0])
-        #         check = self.fetch_input(post_u_input, *u_heap[0])
-        #         try:
-        #             pred = self.fetch_input(self.state_graph[self.prediction_state], *u_heap[0])
-        #         except KeyError:
-        #             pred = None
-        #         if isinstance(origin, list) or isinstance(origin, dict):
-        #             for ii, vv in enumerate(origin):
-        #                 if isinstance(vv, list):
-        #                     path = copy.copy(u_heap[0])
-        #                     path.append(ii)
-        #                     heapq.heappush(u_heap, path)
-        #                 if isinstance(origin, dict):
-        #                     path = copy.copy(u_heap[0])
-        #                     path.append(vv)
-        #                     heapq.heappush(u_heap, path)
-        #                 if isinstance(origin, list):
-        #                     path = copy.copy(u_heap[0])
-        #                     path.append(ii)
-        #                     heapq.heappush(u_heap, path)
-        #                 if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
-        #                     try:
-        #                         if str((origin, check)) in self.knowledge['u-' + str(key) + '/Value Pairs'].keys():
-        #                             found_rule = False
-        #                             for item in self.knowledge['u-' + str(key) + '/Value Pairs'][str((origin, check))]:
-        #                                 if item[1] == act:
-        #                                     # self.log.debug('UPDATING RULE %s %s %s', path, vv, check[ii])
-        #                                     self.update_rule(act, 'u', key, u_heap[0], origin, check, None, item[0])
-        #                                     found_rule = True
-        #                             if not found_rule:
-        #                                 self.create_rule(act, 'u', key, u_heap[0], origin, check)
-        #                         else:
-        #                             self.create_rule(act, 'u', key, u_heap[0], origin, check)
-        #                     except KeyError:
-        #                         self.create_rule(act, 'u', key, u_heap[0], origin, check)
-        #
-        #                     if pred != check:
-        #                         u_mismatch_result[key] = u_heap[0]
-        #         else:
-        #             try:
-        #                 if str((origin, check)) in self.knowledge['u-' + str(key) + '/Value Pairs'].keys():
-        #                     found_rule = False
-        #                     for item in self.knowledge['u-' + str(key) + '/Value Pairs'][str((origin, check))]:
-        #                         if item[1] == act:
-        #                             # self.log.debug('UPDATING RULE %s %s %s', path, vv, check[ii])
-        #                             self.update_rule(act, 'u', key, u_heap[0], origin, check, None, item[0])
-        #                             found_rule = True
-        #                     if not found_rule:
-        #                         self.create_rule(act, 'u', key, u_heap[0], origin, check)
-        #                 else:
-        #                     self.create_rule(act, 'u', key, u_heap[0], origin, check)
-        #             except KeyError:
-        #                 self.create_rule(act, 'u', key, u_heap[0], origin, check)
-        #
-        #             if pred != check:
-        #                 u_mismatch_result[key] = u_heap[0]
-        #
-        #         heapq.heappop(u_heap)
 
         # If there was a mismatch, clear the action plan
         if s_mismatch_result or u_mismatch_result:
@@ -381,14 +287,6 @@ class Airis:
         goal_state = None
         end_search = False
         unknown_act = False
-
-        # Sort tasks by priority
-        # for task_key in self.tasks.keys():
-        #     for task in self.tasks[task_key]:
-        #         if task[5] != 0:
-        #             heapq.heappush(task_heap, (task[5], task_key, task))
-        #         else:
-        #             zero_tasks.append((task_key, task))
 
         step = 0
         checked_states = set()
@@ -796,8 +694,14 @@ class Airis:
         predict_state['s_input'] = copy.deepcopy(self.state_graph[base_state]['s_input'])
         predict_state['u_input'] = copy.deepcopy(self.state_graph[base_state]['u_input'])
         predict_state['actions'] = copy.deepcopy(self.state_graph[base_state]['actions'])
-        predict_state['applied_rules'] = dict()
-        predict_state['all_rules'] = dict()
+        predict_state['applied_rules_s'] = dict()
+        predict_state['applied_rules_s'][act] = dict()
+        predict_state['applied_rules_u'] = dict()
+        predict_state['applied_rules_u'][act] = dict()
+        predict_state['all_rules_s'] = dict()
+        predict_state['all_rules_s'][act] = dict()
+        predict_state['all_rules_u'] = dict()
+        predict_state['all_rules_u'][act] = dict()
         predict_state['compare'] = 0
         predict_state['match_ratio'] = 0
         predict_state['match_count'] = 0
@@ -934,6 +838,7 @@ class Airis:
         # Predict unstructured inputs
         u_path = []
         for key in self.u_input.keys():
+            predict_u_heap[key] = dict()
             u_heap = []
             if isinstance(self.u_input[key], list) or isinstance(self.u_input[key], dict):
                 heapq.heappush(u_heap, [key])
@@ -971,19 +876,23 @@ class Airis:
 
             # check indexes
             try:
-                for outcome in self.knowledge['u-' + str(key) + '/indexes/' + str(index)]:
-                    outcomes[outcome] += 1
-            except KeyError:
                 for outcome in outcomes.keys():
-                    outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]))
+                    if outcome in self.knowledge['u-' + str(key) + '/indexes/' + str(index)]:
+                        outcomes[outcome] += 1
+                    else:
+                        outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]))
+            except KeyError:
+                pass
 
             # check actions
             try:
-                for outcome in self.knowledge['u-' + str(key) + '/actions/' + str(act)]:
-                    outcomes[outcome] += 1
-            except KeyError:
                 for outcome in outcomes.keys():
-                    outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(act)]))
+                    if outcome in self.knowledge['u-' + str(key) + '/actions/' + str(act)]:
+                        outcomes[outcome] += 1
+                    else:
+                        outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(act)]))
+            except KeyError:
+                pass
 
             # check unstructured inputs
             c_u_path = []
@@ -1012,14 +921,13 @@ class Airis:
             for c_path in c_u_path:
                 # self.log.debug('PREDICT: c_path in c_u_path %s', c_path)
                 try:
-                    for outcome in self.knowledge['u-' + str(key) + '/u conditions/' + str(c_path[0]) + '/' + str(c_path[1]) + '/' + str(c_path[2])]:
-                        outcomes[outcome] += 1
-                except KeyError:
                     for outcome in outcomes.keys():
-                        try:
+                        if outcome in self.knowledge['u-' + str(key) + '/u conditions/' + str(c_path[0]) + '/' + str(c_path[1]) + '/' + str(c_path[2])]:
+                            outcomes[outcome] += 1
+                        else:
                             outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]))
-                        except KeyError:
-                            pass
+                except KeyError:
+                    pass
 
             # Check outcomes for structured inputs
             c_s_path = []
@@ -1053,6 +961,7 @@ class Airis:
                                     pass
 
             for outcome in outcomes.keys():
+                # print('PREDICT: outcome to add to predict_heap', outcomes)
                 outcome_heap = []
                 try:
                     # clean result in knowledge
@@ -1075,34 +984,33 @@ class Airis:
                 # self.log.debug('PREDICT: outcome heap %s', outcome_heap)
                 try:
                     heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome], outcome, index, outcome_heap[0], act))
+                    # print('PREDICT: added item to predict_u_heap', key, tuple(index), (-outcomes[outcome], outcome, index, outcome_heap[0], act))
                 except KeyError:
-                    predict_u_heap[key] = dict()
                     predict_u_heap[key][tuple(index)] = []
                     heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome], outcome, index, outcome_heap[0], act))
+                    # print('PREDICT: created tuple key and added item to predict_u_heap', key, tuple(index), (-outcomes[outcome], outcome, index, outcome_heap[0], act))
 
             predict_state['outcomes'] |= outcomes
 
+            for item in predict_u_heap[key].keys():
+                print('PREDICT: predict_u_heap index tuples:', item)
         # Predict actions (TODO)
 
         # Apply best predicted changes to predict state
 
         self.log.debug('PREDICT: predict state outcomes dict %s', predict_state['outcomes'])
 
+
+
         # Apply structured changes
         for key in predict_s_heap.keys():
             for path in predict_s_heap[key].keys():
-                try:
-                    predict_state['all_rules'][key][str(path)] = copy.deepcopy(predict_s_heap[key][path])
-                except KeyError:
-                    predict_state['all_rules'][key] = dict()
-                    predict_state['all_rules'][key][str(path)] = copy.deepcopy(predict_s_heap[key][path])
+                predict_state['all_rules_s'][act][key] = dict()
+                predict_state['all_rules_s'][act][key][str(path)] = copy.deepcopy(predict_s_heap[key][path])
                 predict_state['match_total'] += 1
                 data = heapq.heappop(predict_s_heap[key][path])
-                try:
-                    predict_state['applied_rules'][key][str(path)] = data
-                except KeyError:
-                    predict_state['applied_rules'][key] = dict()
-                    predict_state['applied_rules'][key][str(path)] = data
+                predict_state['applied_rules_s'][act][key] = dict()
+                predict_state['applied_rules_s'][act][key][str(path)] = data
                 predict_state['match_count'] += -data[0]
                 *head, last = path
                 temp = predict_state['s_input'][key]
@@ -1117,19 +1025,13 @@ class Airis:
 
         # Apply unstructured changes
         for key in predict_u_heap.keys():
+            predict_state['all_rules_u'][act][key] = dict()
+            predict_state['applied_rules_u'][act][key] = dict()
             for path in predict_u_heap[key].keys():
-                try:
-                    predict_state['all_rules'][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
-                except KeyError:
-                    predict_state['all_rules'][key] = dict()
-                    predict_state['all_rules'][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
+                predict_state['all_rules_u'][act][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
                 predict_state['match_total'] += 1
                 data = heapq.heappop(predict_u_heap[key][path])
-                try:
-                    predict_state['applied_rules'][key][str(path)] = data
-                except KeyError:
-                    predict_state['applied_rules'][key] = dict()
-                    predict_state['applied_rules'][key][str(path)] = data
+                predict_state['applied_rules_u'][act][key][str(path)] = data
                 predict_state['match_count'] += -data[0]
                 *head, last = path
                 head.pop(0)
@@ -1155,7 +1057,6 @@ class Airis:
 
         self.log.debug('PREDICT: base state edges outcomes %s', self.state_graph[base_state]['edges'][str(act)]['outcomes'])
 
-        self.state_graph[base_state]['edges'][str(act)][new_hash] = (copy.copy(predict_state['match_count']), copy.deepcopy(predict_state['applied_rules']), copy.deepcopy(predict_state['all_rules']))
         try:
             heapq.heappush(self.state_graph[base_state]['edges'][str(act)]['state_heap'], (-copy.copy(predict_state['match_count']), new_hash))
         except KeyError:
@@ -1164,10 +1065,18 @@ class Airis:
 
         self.log.debug('PREDICT: base state edges action state_heap %s %s', str(act), self.state_graph[base_state]['edges'][str(act)]['state_heap'])
 
+        self.state_graph[base_state]['all_rules_s'][act] = copy.deepcopy(predict_state['all_rules_s'][act])
+        self.state_graph[base_state]['all_rules_u'][act] = copy.deepcopy(predict_state['all_rules_u'][act])
+
+        print('PREDICT: base_state', base_state)
+        print('PREDICT: act', act)
+        print('PREDICT: All rules for the act', predict_state['all_rules_u'][act])
+
+
         # Check if the predicted state already exists in the state graph. If not, create it.
         try:
-            find = self.state_graph[new_hash]
-            self.log.debug('PREDICT: new hash already exists in state graph')
+            check = self.state_graph[new_hash]
+            self.log.debug('PREDICT: hash %s already exists in state graph, updated action %s prediction', new_hash, act)
         except KeyError:
             self.state_graph[new_hash] = dict()
             self.state_graph[new_hash]['s_input'] = copy.deepcopy(predict_state['s_input'])
@@ -1177,7 +1086,9 @@ class Airis:
             self.state_graph[new_hash]['edges'] = dict()
             self.state_graph[new_hash]['grounded'] = False
             self.state_graph[new_hash]['match_total'] = copy.copy(predict_state['match_total'])
-            self.log.debug('PREDICT: created new state graph from predicted hash')
+            self.state_graph[new_hash]['all_rules_s'] = dict()
+            self.state_graph[new_hash]['all_rules_u'] = dict()
+            self.log.debug('PREDICT: created new state graph from predicted hash %s for action %s', new_hash, act)
 
         # Return the new state hash key
         return new_hash
@@ -1199,28 +1110,47 @@ class Airis:
 
         # See if a unique outcome already exists. If so, then do not create a new rule
         try:
-            update = False
-            for outcome_id in self.knowledge[input_type + '-' + str(key) + '/outcome_ids']:
-                abs_values = self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(outcome_id)]
-                if len(abs_values) == 1 and post_val in abs_values:
-                    print('error abs: ', abs_values, post_val, outcome_id)
-                    self.update_rule(act, input_type, key, index, pre_val, post_val, outcome_id)
-                    update = True
-                if type(post_val) != str:
-                    rel_values = self.knowledge[input_type + '-' + str(key) + '/relative/' + str(outcome_id)]
-                    if len(rel_values) == 1 and post_val - pre_val in rel_values:
-                        print('error rel: ', abs_values, post_val, outcome_id)
-                        self.update_rule(act, input_type, key, index, pre_val, post_val, outcome_id)
-                        update = True
-                    if pre_val != 0:
-                        rat_values = self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(outcome_id)]
-                        if len(rat_values) == 1 and post_val / pre_val in rat_values:
-                            print('error: ratio', abs_values, post_val, outcome_id)
-                            self.update_rule(act, input_type, key, index, pre_val, post_val, outcome_id)
-                            update = True
+            predict_heap = []
+            print('UPDATE CHECK: self.pre_capture_state', self.pre_capture_state)
+            print('UPDATE CHECK: act', act)
+            for item in self.state_graph.keys():
+                print('UPDATE CHECK: state graph hashes', item)
+            if input_type == 's':
+                predict_heap = copy.deepcopy(self.state_graph[self.pre_capture_state]['all_rules_s'][act])
+            if input_type == 'u':
+                predict_heap = copy.deepcopy(self.state_graph[self.pre_capture_state]['all_rules_u'][act])
 
-                if update:
-                    return None
+            print('UPDATE CHECK: create rule index', index, type(index))
+
+            print('UPDATE CHECK: predict_heap', predict_heap)
+
+            for item in predict_heap[key].keys():
+                print('UPDATE CHECK: Predict heap index tuples', item, type(item))
+
+            outcome_heap = predict_heap[key][str(tuple(index))]
+
+            print('UPDATE CHECK: outcome_heap', outcome_heap)
+
+            while outcome_heap:
+
+                data = heapq.heappop(outcome_heap)
+                print('UPDATE CHECK: data', data)
+                print('UPDATE CHECK: act, index, pre_val, post_val', act, index, pre_val, post_val)
+                # data format (-match, outcome_id, index, (len, 'ratio' / 'absolute' / 'relative', result), act)
+
+                if data[2] == index:
+                    if post_val in self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(data[1])] and len(self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(data[1])]) == 1:
+                        self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
+                        return None
+                    if type(post_val) != str:
+                        if post_val - pre_val in self.knowledge[input_type + '-' + str(key) + '/relative/' + str(data[1])] and len(self.knowledge[input_type + '-' + str(key) + '/relative/' + str(data[1])]) == 1:
+                            self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
+                            return None
+                        if pre_val != 0:
+                            if post_val / pre_val in  self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(data[1])] and len(self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(data[1])]) == 1:
+                                self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
+                                return None
+
         except KeyError:
             pass
 
@@ -1268,10 +1198,6 @@ class Airis:
                 origin = self.fetch_input(self.u_input, *u_heap[0])
                 if isinstance(origin, list) or isinstance(origin, dict):
                     for ii, vv in enumerate(origin):
-                        # if isinstance(vv, list):
-                        #     path = copy.copy(u_heap[0])
-                        #     path.append(ii)
-                        #     heapq.heappush(u_heap, path)
                         if isinstance(origin, dict):
                             path = copy.copy(u_heap[0])
                             path.append(vv)
@@ -1280,8 +1206,6 @@ class Airis:
                             path = copy.copy(u_heap[0])
                             path.append(ii)
                             heapq.heappush(u_heap, path)
-                        # if type(origin) is not dict and type(vv) is not list and type(origin) is not list:
-                        #     u_path.append((key, u_heap[0], origin))
                 else:
                     u_path.append((key, u_heap[0], origin))
 
@@ -1324,8 +1248,8 @@ class Airis:
                     self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(new_rule) + '/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel)] = {str(path[2])}
 
         print('created rule', new_rule)
-        for item in self.knowledge:
-            print('after rule creation', item, ' | ', self.knowledge[item])
+        # for item in self.knowledge:
+        #     print('after rule creation', item, ' | ', self.knowledge[item])
 
         return new_rule
 
@@ -1336,9 +1260,7 @@ class Airis:
         for item in self.knowledge:
             print('pre update knowledge', item, ' | ', self.knowledge[item])
 
-        print('here 1')
-
-        print('update error', input_type, key, rule, post_val)
+        print('update data', input_type, key, index, rule, post_val, act)
         self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(rule)].add(post_val)
         print('here 1.1')
         if type(post_val) != str:
@@ -1350,8 +1272,6 @@ class Airis:
                 except KeyError:
                     self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(rule)] = {post_val / pre_val}
 
-        print('here 2')
-
         try:
             self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(index)].add(rule)
         except KeyError:
@@ -1359,16 +1279,12 @@ class Airis:
 
         self.knowledge[input_type + '-' + str(key) + '/indexes/' + str(rule)].add(str(index))
 
-        print('here 3')
-
         try:
             self.knowledge[input_type + '-' + str(key) + '/actions/' + str(act)].add(rule)
         except KeyError:
             self.knowledge[input_type + '-' + str(key) + '/actions/' + str(act)] = {rule}
 
         self.knowledge[input_type + '-' + str(key) + '/actions/' + str(rule)].add(str(act))
-
-        print('here 4')
 
         s_path = []
         for key in self.s_input.keys():
@@ -1399,8 +1315,6 @@ class Airis:
                         self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(rule) + '/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel)].add(str(path[2]))
                     except KeyError:
                         self.knowledge[input_type + '-' + str(key) + '/s conditions rel/' + str(rule) + '/' + str(path_origin[0]) + '/' + str(path_origin[1]) + '/' + str(rel)] = {str(path[2])}
-
-        print('here 5')
 
         u_path = []
         for key in self.u_input.keys():
@@ -1446,6 +1360,7 @@ class Airis:
 
         for item in self.knowledge:
             print('pos update knowledge', item, ' | ', self.knowledge[item])
+
 
 
     def save_knowledge(self, fname):
