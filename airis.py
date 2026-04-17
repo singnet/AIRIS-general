@@ -262,6 +262,7 @@ class Airis:
         # self.save_state_graph()
 
     def make_plan(self, o_state):
+        self.log.debug('PLANNING: Making plan')
         # Search the state graph for the lowest compare based on priority of the task
         # During the search, if an edge in the state graph does not have a high confidence, make a new prediction
         # If the predicted state matches a state in the state graph, update the edge from the current state to the predicted state
@@ -283,10 +284,10 @@ class Airis:
         checked_states = set()
         state_heap = []
         # self.log.debug('state graph compare %s', self.state_graph[o_state]['compare'])
-        if self.state_graph[o_state]['compare'] is not None:
-            heapq.heappush(state_heap, (self.state_graph[o_state]['compare'][0], 0, o_state, self.state_graph[o_state]['compare']))
-        else:
-            heapq.heappush(state_heap, (0, 0, o_state, None))
+        # if self.state_graph[o_state]['compare'] is not None:
+        #     heapq.heappush(state_heap, (self.state_graph[o_state]['compare'][0], 0, o_state, self.state_graph[o_state]['compare']))
+        # else:
+        heapq.heappush(state_heap, (0, 0, o_state, None))
 
         while not goal_reached:
             # self.log.debug('state heap %s', state_heap)
@@ -295,17 +296,17 @@ class Airis:
             # self.log.debug('current_state_data %s', current_state_data)
 
             # If the compare of the current state results in task completion, make the completion action the plan
-            if current_state_data[3] is not None:
-                if current_state_data[3][3]:
-                    goal_reached = True
-                    goal_state = current_state
-                    # print('new goal state 1', goal_state)
-                    self.action_plan.insert(0, (path_heap[goal_state][0][3], goal_state, 0, None))
-                    break
-
-                # If the only taask is complete, escape planning
-                if current_state_data[3][4]:
-                    break
+            # if current_state_data[3] is not None:
+            #     if current_state_data[3][3]:
+            #         goal_reached = True
+            #         goal_state = current_state
+            #         # print('new goal state 1', goal_state)
+            #         self.action_plan.insert(0, (path_heap[goal_state][0][3], goal_state, 0, None))
+            #         break
+            #
+            #     # If the only taask is complete, escape planning
+            #     if current_state_data[3][4]:
+            #         break
 
             step += 1
             arg_list = dict()
@@ -364,6 +365,7 @@ class Airis:
 
                     if unknown_act:
                         print('AIRIS: Action not yet tried...')
+                        self.log.debug('PLANNING: Unknown action')
                         self.action_plan.insert(0, (act, current_state, 0, None))
                         # print('new goal state 2', goal_state)
                         # (match ratio, step, heap size, action, current state)
@@ -380,17 +382,17 @@ class Airis:
                     edge_data = self.state_graph[current_state]['edges'][str(act)]['state_heap'][0]
 
                     # if compare results in an outcome that finishes a task
-                    if self.state_graph[current_state]['compare'] is not None:
-                        if self.state_graph[current_state]['compare'][3] and self.state_graph[current_state]['compare'][1] == act:
-                            self.action_plan.insert(0, (act, edge_data[1], edge_data[0], None))
-                            goal_state = edge_data[1]
-                            goal_heap = []
-                            break
-                        else:
-                            heapq.heappush(goal_heap, (self.state_graph[current_state]['compare'][0], -edge_data[0], step, edge_data[1], act, current_state))
+                    # if self.state_graph[current_state]['compare'] is not None:
+                    #     if self.state_graph[current_state]['compare'][3] and self.state_graph[current_state]['compare'][1] == act:
+                    #         self.action_plan.insert(0, (act, edge_data[1], edge_data[0], None))
+                    #         goal_state = edge_data[1]
+                    #         goal_heap = []
+                    #         break
+                    #     else:
+                    #         heapq.heappush(goal_heap, (self.state_graph[current_state]['compare'][0], -edge_data[0], step, edge_data[1], act, current_state))
 
-                    else:
-                        heapq.heappush(goal_heap, (0, -edge_data[0], step, edge_data[1], act, current_state))
+                    # else:
+                    heapq.heappush(goal_heap, (0, -edge_data[0], step, edge_data[1], act, current_state))
 
                 if unknown_act:
                     break
@@ -406,6 +408,11 @@ class Airis:
 
         # print('path heap', path_heap)
         # print('goal heap', goal_heap)
+        self.log.debug('PLANNING: goal heap %s', goal_heap)
+        print('PLANNING: goal heap', goal_heap)
+        for i, v  in enumerate(goal_heap):
+            self.log.debug('PLANNING: goal heap %s, %s', i, v)
+            print('PLANNING: goal heap', i, v)
 
         # randomize equivalent goal_heap entries
         # if goal_heap:
@@ -468,7 +475,7 @@ class Airis:
 
                 # Gather outcome IDs for the task
                 try:
-                    self.log.debug('COMPARE ERROR: task[0] %s, task[1] %s, task[2] %s', task[0], task[1], task[2])
+                    self.log.debug('COMPARE: task[0] %s, task[1] %s, task[2] %s', task[0], task[1], task[2])
                     outcome_set = self.knowledge[str(task[0]) + '-' + str(task[1]) + '/outcome_ids']
                     index_set = self.knowledge[str(task[0]) + '-' + str(task[1]) + '/indexes/' + str([task[1], task[2], task[3]])]
                     self.log.debug('COMPARE: outcome set %s', outcome_set)
@@ -664,8 +671,8 @@ class Airis:
                     for act_key in self.state_graph[state]['edges'].keys():
                         edge_outcomes = self.state_graph[state]['edges'][act_key]['outcomes']
                         for outcome in outcomes:
-                            self.log.debug('COMPARE: add to compare heap %s %s %s %s', edge_outcomes[outcome], modifiers[outcome], task[5], [-(edge_outcomes[outcome] * modifiers[outcome] * task[5]), act_key, outcome, finish_task, task_complete])
-                            heapq.heappush(compare_heap, (-(edge_outcomes[outcome] * modifiers[outcome] * task[5]), act_key, outcome, finish_task, task_complete))
+                            self.log.debug('COMPARE: add to compare heap %s %s %s %s', edge_outcomes[outcome], modifiers[outcome], task[5], [-(edge_outcomes[outcome][1] * modifiers[outcome] * task[5]), act_key, outcome, finish_task, task_complete])
+                            heapq.heappush(compare_heap, (-(edge_outcomes[outcome][1] * modifiers[outcome] * task[5]), act_key, outcome, finish_task, task_complete))
                 except KeyError:
                     pass
 
@@ -869,36 +876,45 @@ class Airis:
             # initialize outcome dict
             try:
                 for outcome in self.knowledge['u-' + str(key) + '/outcome_ids']:
-                    outcomes[outcome] = 0
+                    outcomes[outcome] = [0, 0, 0] #match, match count, match totoal
             except KeyError:
                 pass
 
             # check indexes
             try:
+                del_list = []
                 for outcome in outcomes.keys():
                     if outcome in self.knowledge['u-' + str(key) + '/indexes/' + str(index)]:
                         # outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]))
-                        outcomes[outcome] += 1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)])
-                        print('PREDICT: found index', str(index), 'for outcome', outcome, 'and added', 1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]))
+                        outcomes[outcome][0] += 1
+                        outcomes[outcome][1] += 1
+                        outcomes[outcome][2] += 1
+                        print('PREDICT: found index', str(index), 'for outcome', outcome, 'and added', 1, self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)])
                         print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
                     else:
-                        outcomes[outcome] -= 1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)])
-                        print('PREDICT: did not find index', str(index), 'for outcome', outcome, 'and added', -1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]))
+                        del_list.append(outcome)
+                        # outcomes[outcome] -= 1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)])
+                        print('PREDICT: did not find index', str(index), 'for outcome', outcome, 'removed outcome from consideration', self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)])
+                        # print('PREDICT: did not find index', str(index), 'for outcome', outcome, 'and added', -1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]), self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)])
                         print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
+                for outcome in del_list:
+                    del outcomes[outcome]
             except KeyError:
                 print('PREDICT: Keyerror when checking indexes!')
 
             # check actions
             try:
                 for outcome in outcomes.keys():
+                    outcomes[outcome][2] += 1
                     if outcome in self.knowledge['u-' + str(key) + '/actions/' + str(act)]:
                         # outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)]))
-                        outcomes[outcome] += 1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)])
-                        print('PREDICT: found action', act, 'for outcome', outcome, 'and added ', 1 / len(self.knowledge['u-' + str(key) + '/indexes/' + str(outcome)]))
+                        outcomes[outcome][0] += 1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)])
+                        outcomes[outcome][1] += 1
+                        print('PREDICT: found action', act, 'for outcome', outcome, 'and added ', 1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)]), self.knowledge['u-' + str(key) + '/actions/' + str(outcome)])
                         print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
                     else:
-                        outcomes[outcome] -= 1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)])
-                        print('PREDICT: did not find action', act, 'for outcome', outcome, 'and added ', -1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)]))
+                        outcomes[outcome][0] -= 1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)])
+                        print('PREDICT: did not find action', act, 'for outcome', outcome, 'and added ', -1 / len(self.knowledge['u-' + str(key) + '/actions/' + str(outcome)]), self.knowledge['u-' + str(key) + '/actions/' + str(outcome)])
                         print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
             except KeyError:
                 print('PREDICT: Keyerror when checking actions!')
@@ -932,18 +948,28 @@ class Airis:
                 # self.log.debug('PREDICT: c_path in c_u_path %s', c_path)
                 try:
                     for outcome in outcomes.keys():
-                        if str(c_path[2]) in self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]:
-                            outcomes[outcome] += 1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])])
-                            print('PREDICT: Found condition', c_path[2], 'for index', c_path[1], 'for outcome', outcome, 'and added', 1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]))
+                        outcomes[outcome][2] += 1
+                        if c_path[2] in self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]:
+                            outcomes[outcome][0] += 1
+                            outcomes[outcome][1] += 1
+                            print('PREDICT: Found condition', c_path[2], 'for index', c_path[1], 'for outcome', outcome, 'and added', 1, self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])])
                             print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
                         else:
-                            outcomes[outcome] -= 1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])])
-                            print('PREDICT: Did not find condition', c_path[2], 'for index', c_path[1], 'for outcome', outcome, 'and added', -1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]))
-                            print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
-                        # if outcome in self.knowledge['u-' + str(key) + '/u conditions/' + str(c_path[0]) + '/' + str(c_path[1]) + '/' + str(c_path[2])]:
-                        #     outcomes[outcome] += 1
-                        # else:
-                        #     outcomes[outcome] += 1 - (1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]))
+                            if type(c_path[2]) is not str:
+                                closest = min(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])], key=lambda x: abs(x - c_path[2]))
+                                if c_path[2] < closest:
+                                    outcomes[outcome][0] += c_path[2] / closest
+                                    outcomes[outcome][1] += c_path[2] / closest
+                                    print('PREDICT: Did not find condition', c_path[2], 'for index', c_path[1], 'for outcome', outcome, 'found closest value', closest, 'and added', c_path[2] / closest, self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])])
+                                else:
+                                    outcomes[outcome][0] += closest / c_path[2]
+                                    outcomes[outcome][1] += closest / c_path[2]
+                                    print('PREDICT: Did not find condition', c_path[2], 'for index', c_path[1], 'for outcome', outcome, 'found closest value', closest, 'and added', closest / c_path[2], self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])])
+                                print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
+                            else:
+                                outcomes[outcome] += 0 # Just for code readability
+                                print('PREDICT: Did not find condition', c_path[2], 'for index', c_path[1], 'for outcome', outcome, 'and added', -1 / len(self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])]), self.knowledge['u-' + str(key) + '/u conditions/' + str(outcome) + '/' + str(c_path[0]) + '/' + str(c_path[1])])
+                                print('PREDICT: outcome running total for outcome', outcome, outcomes[outcome])
                 except KeyError:
                     print('PREDICT: Keyerror when checking u conditions!')
 
@@ -1007,12 +1033,12 @@ class Airis:
 
                 # self.log.debug('PREDICT: outcome heap %s', outcome_heap)
                 try:
-                    heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome], outcome, index, outcome_heap[0], act))
-                    print('PREDICT: added item to predict_u_heap', key, tuple(index), (-outcomes[outcome], outcome, index, outcome_heap[0], act))
+                    heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome][0], outcome, index, outcome_heap[0], act, outcomes[outcome][1], outcomes[outcome][2]))
+                    print('PREDICT: added item to predict_u_heap', key, tuple(index), (-outcomes[outcome][0], outcome, index, outcome_heap[0], act, outcomes[outcome][1], outcomes[outcome][2]))
                 except KeyError:
                     predict_u_heap[key][tuple(index)] = []
-                    heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome], outcome, index, outcome_heap[0], act))
-                    print('PREDICT: created tuple key and added item to predict_u_heap', key, tuple(index), (-outcomes[outcome], outcome, index, outcome_heap[0], act))
+                    heapq.heappush(predict_u_heap[key][tuple(index)], (-outcomes[outcome][0], outcome, index, outcome_heap[0], act, outcomes[outcome][1], outcomes[outcome][2]))
+                    print('PREDICT: created tuple key and added item to predict_u_heap', key, tuple(index), (-outcomes[outcome][0], outcome, index, outcome_heap[0], act, outcomes[outcome][1], outcomes[outcome][2]))
 
             predict_state['outcomes'] |= outcomes
 
@@ -1029,11 +1055,11 @@ class Airis:
             for path in predict_s_heap[key].keys():
                 predict_state['all_rules_s'][act][key] = dict()
                 predict_state['all_rules_s'][act][key][str(path)] = copy.deepcopy(predict_s_heap[key][path])
-                predict_state['match_total'] += 1
                 data = heapq.heappop(predict_s_heap[key][path])
+                predict_state['match_total'] += data[6]
                 predict_state['applied_rules_s'][act][key] = dict()
                 predict_state['applied_rules_s'][act][key][str(path)] = data
-                predict_state['match_count'] += -data[0]
+                predict_state['match_count'] += data[5]
                 *head, last = path
                 temp = predict_state['s_input'][key]
                 for i in head:
@@ -1052,10 +1078,10 @@ class Airis:
             for path in predict_u_heap[key].keys():
                 predict_state['all_rules_u'][act][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
                 print('PREDICT: copied all rules for key, act, and path', key, act, predict_u_heap[key][path])
-                predict_state['match_total'] += 1
                 data = heapq.heappop(predict_u_heap[key][path])
+                predict_state['match_total'] += data[6]
                 predict_state['applied_rules_u'][act][key][str(path)] = data
-                predict_state['match_count'] += -data[0]
+                predict_state['match_count'] += data[5]
                 *head, last = path
                 head.pop(0)
                 temp = predict_state['u_input'][key]
@@ -1169,18 +1195,19 @@ class Airis:
                     print('UPDATE CHECK: act, index, pre_val, post_val', act, index, pre_val, post_val)
                     # data format (-match, outcome_id, index, (len, 'ratio' / 'absolute' / 'relative', result), act)
 
-                    if type(post_val) != str:
-                        if post_val - pre_val in self.knowledge[input_type + '-' + str(key) + '/relative/' + str(data[1])]:
-                            self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
-                            return None
-                        # if pre_val != 0:
-                        #     if post_val / pre_val in  self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(data[1])] and len(self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(data[1])]) == 1:
-                        #         self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
-                        #         return None
-                    else:
-                        if post_val in self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(data[1])]:
-                            self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
-                            return None
+                    if str(index) == str(data[2]):
+                        if type(post_val) != str:
+                            if post_val - pre_val in self.knowledge[input_type + '-' + str(key) + '/relative/' + str(data[1])]:
+                                self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
+                                return None
+                            # if pre_val != 0:
+                            #     if post_val / pre_val in  self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(data[1])] and len(self.knowledge[input_type + '-' + str(key) + '/ratio/' + str(data[1])]) == 1:
+                            #         self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
+                            #         return None
+                        else:
+                            if post_val in self.knowledge[input_type + '-' + str(key) + '/absolute/' + str(data[1])]:
+                                self.update_rule(act, input_type, key, index, pre_val, post_val, data[1])
+                                return None
 
         except KeyError:
             pass
@@ -1247,7 +1274,7 @@ class Airis:
             except KeyError:
                 self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(path[0]) + '/' + str(path[1]) + '/' + str(path[2])] = {new_rule}
 
-            self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(new_rule) + '/' + str(path[0]) + '/' + str(path[1])] = {str(path[2])}
+            self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(new_rule) + '/' + str(path[0]) + '/' + str(path[1])] = {path[2]}
 
         # Go through all structured inputs and record conditions
         s_path = []
@@ -1379,9 +1406,9 @@ class Airis:
                 self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(path[0]) + '/' + str(path[1]) + '/' + str(path[2])] = {rule}
 
             try:
-                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(rule) + '/' + str(path[0]) + '/' + str(path[1])].add(str(path[2]))
+                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(rule) + '/' + str(path[0]) + '/' + str(path[1])].add(path[2])
             except KeyError:
-                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(rule) + '/' + str(path[0]) + '/' + str(path[1])] = {str(path[2])}
+                self.knowledge[input_type + '-' + str(key) + '/u conditions/' + str(rule) + '/' + str(path[0]) + '/' + str(path[1])] = {path[2]}
 
         for item in self.knowledge:
             print('pos update knowledge', item, ' | ', self.knowledge[item])
