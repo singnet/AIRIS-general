@@ -252,7 +252,7 @@ class Airis:
         #     # self.log.debug('knowledge data %s', self.knowledge[key])
         # self.save_state_graph()
 
-        self.save_knowledge('Debug')
+        # self.save_knowledge('Debug')
 
         # for key in self.state_graph.keys():
         #     # self.log.debug('state graph key %s', key)
@@ -697,13 +697,13 @@ class Airis:
         predict_state['u_input'] = copy.deepcopy(self.state_graph[base_state]['u_input'])
         predict_state['actions'] = copy.deepcopy(self.state_graph[base_state]['actions'])
         predict_state['applied_rules_s'] = dict()
-        predict_state['applied_rules_s'][act] = dict()
+        predict_state['applied_rules_s'][str(act)] = dict()
         predict_state['applied_rules_u'] = dict()
-        predict_state['applied_rules_u'][act] = dict()
+        predict_state['applied_rules_u'][str(act)] = dict()
         predict_state['all_rules_s'] = dict()
-        predict_state['all_rules_s'][act] = dict()
+        predict_state['all_rules_s'][str(act)] = dict()
         predict_state['all_rules_u'] = dict()
-        predict_state['all_rules_u'][act] = dict()
+        predict_state['all_rules_u'][str(act)] = dict()
         predict_state['compare'] = 0
         predict_state['match_ratio'] = 0
         predict_state['match_count'] = 0
@@ -1053,12 +1053,12 @@ class Airis:
         # Apply structured changes
         for key in predict_s_heap.keys():
             for path in predict_s_heap[key].keys():
-                predict_state['all_rules_s'][act][key] = dict()
-                predict_state['all_rules_s'][act][key][str(path)] = copy.deepcopy(predict_s_heap[key][path])
+                predict_state['all_rules_s'][str(act)][key] = dict()
+                predict_state['all_rules_s'][str(act)][key][str(path)] = copy.deepcopy(predict_s_heap[key][path])
                 data = heapq.heappop(predict_s_heap[key][path])
                 predict_state['match_total'] += data[6]
-                predict_state['applied_rules_s'][act][key] = dict()
-                predict_state['applied_rules_s'][act][key][str(path)] = data
+                predict_state['applied_rules_s'][str(act)][key] = dict()
+                predict_state['applied_rules_s'][str(act)][key][str(path)] = data
                 predict_state['match_count'] += data[5]
                 *head, last = path
                 temp = predict_state['s_input'][key]
@@ -1073,14 +1073,14 @@ class Airis:
 
         # Apply unstructured changes
         for key in predict_u_heap.keys():
-            predict_state['all_rules_u'][act][key] = dict()
-            predict_state['applied_rules_u'][act][key] = dict()
+            predict_state['all_rules_u'][str(act)][key] = dict()
+            predict_state['applied_rules_u'][str(act)][key] = dict()
             for path in predict_u_heap[key].keys():
-                predict_state['all_rules_u'][act][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
+                predict_state['all_rules_u'][str(act)][key][str(path)] = copy.deepcopy(predict_u_heap[key][path])
                 print('PREDICT: copied all rules for key, act, and path', key, act, predict_u_heap[key][path])
                 data = heapq.heappop(predict_u_heap[key][path])
                 predict_state['match_total'] += data[6]
-                predict_state['applied_rules_u'][act][key][str(path)] = data
+                predict_state['applied_rules_u'][str(act)][key][str(path)] = data
                 predict_state['match_count'] += data[5]
                 *head, last = path
                 head.pop(0)
@@ -1114,12 +1114,12 @@ class Airis:
 
         self.log.debug('PREDICT: base state edges action state_heap %s %s', str(act), self.state_graph[base_state]['edges'][str(act)]['state_heap'])
 
-        self.state_graph[base_state]['all_rules_s'][act] = copy.deepcopy(predict_state['all_rules_s'][act])
-        self.state_graph[base_state]['all_rules_u'][act] = copy.deepcopy(predict_state['all_rules_u'][act])
+        self.state_graph[base_state]['all_rules_s'][str(act)] = copy.deepcopy(predict_state['all_rules_s'][str(act)])
+        self.state_graph[base_state]['all_rules_u'][str(act)] = copy.deepcopy(predict_state['all_rules_u'][str(act)])
 
         print('PREDICT: base_state', base_state)
         print('PREDICT: act', act)
-        print('PREDICT: All rules for the act', predict_state['all_rules_u'][act])
+        print('PREDICT: All rules for the act', predict_state['all_rules_u'][str(act)])
 
 
         # Check if the predicted state already exists in the state graph. If not, create it.
@@ -1172,9 +1172,9 @@ class Airis:
             for item in self.state_graph.keys():
                 print('UPDATE CHECK: state graph hashes', item)
             if input_type == 's':
-                predict_heap = copy.deepcopy(self.state_graph[self.pre_capture_state]['all_rules_s'][act])
+                predict_heap = copy.deepcopy(self.state_graph[self.pre_capture_state]['all_rules_s'][str(act)])
             if input_type == 'u':
-                predict_heap = copy.deepcopy(self.state_graph[self.pre_capture_state]['all_rules_u'][act])
+                predict_heap = copy.deepcopy(self.state_graph[self.pre_capture_state]['all_rules_u'][str(act)])
 
             print('UPDATE CHECK: create rule index', index, type(index))
 
@@ -1414,10 +1414,10 @@ class Airis:
             print('pos update knowledge', item, ' | ', self.knowledge[item])
 
 
-
-    def save_knowledge(self, fname):
-        with open(fname + '.json', 'w') as file: #Enable to save data to file
-            file.write(json.dumps(self.knowledge, indent=4, default=serialize_sets))
+    def get_knowledge(self):
+        # with open(fname + '.json', 'w') as file: #Enable to save data to file
+        #     file.write(json.dumps(self.knowledge, indent=4, default=serialize_sets))
+        return json.dumps(self.make_json_serializable(self.knowledge), indent=4)
         # Save the knowledge
 
     def save_state_graph(self):
@@ -1425,6 +1425,9 @@ class Airis:
         #     file.write(json.dumps(self.state_graph, indent=4))
         return json.dumps(self.state_graph, indent=4)
         # Save the state graph
+
+    def load_knowledge(self, knowledge_json):
+        self.knowledge = self.restore_sets_from_json(json.loads(knowledge_json))
 
     def make_hash(self, s_data, u_data, actions):
         hash_string = ''
@@ -1443,3 +1446,42 @@ class Airis:
     def fetch_input(self, arr, *indices):
         arr_copy = copy.deepcopy(arr)
         return reduce(lambda a, i: a[i], indices, arr_copy)
+
+    def make_json_serializable(self, obj):
+        """
+        Recursively traverses a (possibly deeply nested) dictionary (or list/dict structure)
+        and converts any sets into a JSON-serializable marker format.
+        Original lists are left completely untouched.
+        Works for arbitrary nesting levels.
+        """
+        if isinstance(obj, dict):
+            return {k: self.make_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self.make_json_serializable(item) for item in obj]
+        elif isinstance(obj, set):
+            # Marker dict so we can distinguish these from real lists later
+            return {
+                "__type__": "set",
+                "value": [self.make_json_serializable(item) for item in obj]
+            }
+        else:
+            # Numbers, strings, booleans, None, or any other JSON-native type
+            return obj
+
+    def restore_sets_from_json(self, obj):
+        """
+        Recursively restores the marked sets back to Python set objects
+        after the JSON has been loaded.
+        Original lists remain lists.
+        """
+        if isinstance(obj, dict):
+            # Check for our special marker
+            if obj.get("__type__") == "set" and "value" in obj:
+                return set(self.restore_sets_from_json(item) for item in obj["value"])
+            # Normal dictionary → recurse
+            return {k: self.restore_sets_from_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self.restore_sets_from_json(item) for item in obj]
+        else:
+            # Primitive value
+            return obj
